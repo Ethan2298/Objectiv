@@ -1,0 +1,38 @@
+{
+  "dreams": [
+    {
+      "id": "mk4xoe5hu1pbe9jtw",
+      "name": "Have an Amazing Career",
+      "description": "To fulfill app that I am",
+      "goals": [
+        {
+          "id": "mk4xucof4yby341e6",
+          "name": "Absolutely Crush it at growing the family business",
+          "description": "",
+          "dueDate": "2028-02-22",
+          "projects": [
+            {
+              "id": "mk4xx5qfphyp0azv6",
+              "name": "Make every one trust in my intellect and character to lead the business",
+              "description": "",
+              "dueDate": "2027-02-22",
+              "tasks": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mk4xraxrd5dn8wi5l",
+      "name": "Have an amazing relationship",
+      "description": "to build a a family with a women I love and where we bring each other joy and hHappyiness",
+      "goals": []
+    },
+    {
+      "id": "mk4xrwwpfmz9i4vkm",
+      "name": "Have an amazing personal and social life",
+      "description": "to have an amazing personal and social life",
+      "goals": []
+    }
+  ]
+}

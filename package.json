@@ -1,0 +1,12 @@
+{
+  "name": "life",
+  "version": "1.0.0",
+  "description": "Life, Keep it Simple. A terminal tool for transmuting dreams into reality.",
+  "main": "life.js",
+  "scripts": {
+    "start": "node life.js"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81"
+  }
+}
