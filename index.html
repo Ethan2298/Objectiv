@@ -111,14 +111,95 @@
       51%, 100% { opacity: 0; }
     }
 
-    /* Main App */
+    /* Main App - Split Pane Layout (Centered both ways) */
     #app {
       display: none;
+      flex-direction: row;
+      width: 90%;
+      max-width: 1200px;
+      height: 500px;
+      padding-bottom: 40px;
+    }
+
+    /* Side List (left pane - 1/3 width) */
+    #side-list {
+      width: 33.333%;
+      display: flex;
       flex-direction: column;
-      width: 100%;
-      max-width: 500px;
-      padding: 1rem;
-      padding-bottom: 60px;
+      overflow: hidden;
+    }
+
+    #side-list-items {
+      flex: 1;
+      overflow: hidden;
+      padding: 16px 0;
+    }
+
+    /* Side list item with ball indicator */
+    .side-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 16px;
+      cursor: pointer;
+      color: #888;
+      transition: color 0.15s;
+    }
+
+    .side-item:hover {
+      color: #e0e0e0;
+    }
+
+    .side-item.selected {
+      color: #e0e0e0;
+    }
+
+    .side-item-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .side-item-indicator {
+      margin-left: 12px;
+      opacity: 0;
+      color: #0891b2;
+      font-size: 8px;
+      transition: opacity 0.15s;
+    }
+
+    .side-item.selected .side-item-indicator {
+      opacity: 1;
+    }
+
+    /* Content View (right pane - 2/3 width) */
+    #content-view {
+      width: 66.666%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #content-header {
+      padding: 12px 20px;
+      flex-shrink: 0;
+    }
+
+    #content-header-title {
+      font-weight: bold;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    #content-header-description {
+      color: #666;
+      margin-top: 4px;
+      font-size: 13px;
+    }
+
+    #content-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 20px;
     }
 
     /* Header */
@@ -437,20 +518,27 @@
       </div>
     </div>
 
-    <!-- Main App -->
+    <!-- Main App - Split Pane -->
     <div id="app">
-    <div id="header" onclick="handleHeaderClick()">
-      <div id="header-title">OBJECTIVES</div>
-      <div id="header-clarity"></div>
-      <div id="header-description"></div>
+      <!-- Side List (1/3) -->
+      <div id="side-list">
+        <div id="side-list-items"></div>
+      </div>
+
+      <!-- Content View (2/3) -->
+      <div id="content-view">
+        <div id="content-header">
+          <div id="content-header-title">Select an objective</div>
+          <div id="content-header-description"></div>
+        </div>
+        <div id="content-body"></div>
+      </div>
     </div>
 
-    <div id="list-container"></div>
-
+    <!-- Status Bar -->
     <div id="status-bar">
-      <div id="shortcuts">[↑↓] Navigate  [Enter] Select  [a] Add  [r] Refine  [d] Delete  [Esc] Back</div>
+      <div id="shortcuts">[↑↓/Scroll] Navigate  [a] Add  [e] Edit  [r] Refine  [d] Delete</div>
     </div>
-  </div>
 
     <!-- Message Toast -->
     <div id="message-toast"></div>
@@ -470,15 +558,11 @@
     const STORAGE_KEY = 'life-data';
     let data = loadData();
 
-    // Navigation state
-    let navigationStack = [];
-    let currentView = {
-      level: 'objectives',  // 'objectives' or 'objective-detail'
-      parent: null
-    };
-    let selectedIndex = -1;  // -1 = no selection
-    let keyboardMode = false; // Only show selection when using keyboard
-    let selectedSection = 'priorities'; // 'priorities' or 'steps' (for objective-detail view)
+    // Navigation state (simplified for split-pane)
+    let selectedObjectiveIndex = 0;  // Which objective is selected in side list
+    let selectedContentIndex = 0;    // Which item is selected in content view
+    let contentSection = 'priorities'; // 'priorities' or 'steps' in content view
+    let focusPane = 'side-list';     // 'side-list' or 'content-view'
 
     // Prompt state
     let promptMode = null; // null, 'add', 'edit', 'refine', 'log', 'confirm'
@@ -792,9 +876,9 @@
       }
 
       clarityProcessing = false;
-      // Only update if not in prompt mode (avoid disrupting edits)
+      // Only update content view (not side list) when clarity scores arrive
       if (!promptMode) {
-        updateList();
+        renderContentView();
       }
     }
 
@@ -955,62 +1039,251 @@
       `;
     }
 
-    // Update list display
-    function updateList() {
-      const container = document.getElementById('list-container');
+    // ========================================
+    // SPLIT-PANE RENDERING
+    // ========================================
+
+    // Render the side list (objectives with ball indicator)
+    function renderSideList() {
+      const container = document.getElementById('side-list-items');
       container.innerHTML = '';
 
-      if (currentView.level === 'objectives') {
-        renderObjectivesList(container);
+      data.objectives.forEach((obj, index) => {
+        const item = document.createElement('div');
+        item.className = 'side-item' + (index === selectedObjectiveIndex ? ' selected' : '');
+        item.dataset.index = index;
+        item.innerHTML = `
+          <span class="side-item-name">${obj.name}</span>
+          <span class="side-item-indicator">●</span>
+        `;
+        item.onclick = () => {
+          selectObjective(index);
+        };
+        container.appendChild(item);
+      });
+
+      // Add option if < 3 objectives
+      if (data.objectives.length < 3) {
+        const addItem = document.createElement('div');
+        addItem.className = 'side-item';
+        addItem.style.color = '#0891b2';
+        addItem.innerHTML = '<span class="side-item-name">+ Add objective</span>';
+        addItem.onclick = () => startAddObjective();
+        container.appendChild(addItem);
+      }
+    }
+
+    // Select objective without re-rendering side list
+    function selectObjective(index) {
+      if (index === selectedObjectiveIndex) return;
+
+      // Update selection classes only
+      const items = document.querySelectorAll('#side-list-items .side-item');
+      items.forEach((item, i) => {
+        if (i === index) {
+          item.classList.add('selected');
+        } else {
+          item.classList.remove('selected');
+        }
+      });
+
+      selectedObjectiveIndex = index;
+      renderContentView();
+    }
+
+    // Render the content view (selected objective's details)
+    function renderContentView() {
+      const headerTitle = document.getElementById('content-header-title');
+      const headerDesc = document.getElementById('content-header-description');
+      const body = document.getElementById('content-body');
+
+      // Handle no objectives
+      if (data.objectives.length === 0) {
+        headerTitle.textContent = 'No objectives yet';
+        headerDesc.textContent = 'Add your first objective from the left panel';
+        body.innerHTML = '';
+        return;
+      }
+
+      // Clamp index
+      if (selectedObjectiveIndex >= data.objectives.length) {
+        selectedObjectiveIndex = data.objectives.length - 1;
+      }
+
+      const obj = data.objectives[selectedObjectiveIndex];
+      headerTitle.textContent = obj.name;
+      headerDesc.textContent = obj.description || '';
+
+      // Render priorities and steps
+      body.innerHTML = '';
+      renderContentPriorities(body, obj);
+      renderContentSteps(body, obj);
+
+      // Refresh clarity scores
+      refreshClarity(obj);
+      obj.priorities.forEach(p => refreshClarity(p));
+    }
+
+    // Render priorities section in content view
+    function renderContentPriorities(container, obj) {
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      header.textContent = 'PRIORITIES';
+      container.appendChild(header);
+
+      if (obj.priorities.length === 0 && !(promptMode === 'add' && promptTargetSection === 'priorities')) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-hint';
+        empty.textContent = 'no priorities yet';
+        container.appendChild(empty);
+      }
+
+      obj.priorities.forEach((priority, index) => {
+        // Handle confirm mode
+        if (promptMode === 'confirm' && promptTargetSection === 'priorities' && promptTargetIndex === index) {
+          const div = document.createElement('div');
+          div.innerHTML = createConfirmRow(`Delete "${priority.name}"?`);
+          container.appendChild(div.firstElementChild);
+          return;
+        }
+
+        const isEditing = promptMode === 'edit' && promptTargetSection === 'priorities' && promptTargetIndex === index;
+        const isRefining = promptMode === 'refine' && promptTargetSection === 'priorities' && promptTargetIndex === index;
+        const isInEditMode = isEditing || isRefining;
+
+        let textContent = priority.name;
+        if (isRefining) textContent = priority.description || '';
+
+        const listItem = createListItem({
+          icon: isInEditMode ? '>' : '-',
+          iconClass: isInEditMode ? 'editing' : '',
+          content: textContent,
+          contentEditable: isInEditMode,
+          meta: isInEditMode ? '' : getClarityMeta(priority, 'priorities', index),
+          selected: false,
+          onClick: (e) => {
+            if (e.target.classList.contains('edit-btn')) return;
+          }
+        });
+        container.appendChild(listItem);
+      });
+
+      // Add priority prompt or button
+      if (promptMode === 'add' && promptTargetSection === 'priorities') {
+        const div = document.createElement('div');
+        div.innerHTML = createPromptRow('Priority name:', '');
+        container.appendChild(div.firstElementChild);
+      } else if (obj.priorities.length < 3) {
+        const addDiv = document.createElement('div');
+        addDiv.className = 'add-option';
+        addDiv.innerHTML = '+ Add priority';
+        addDiv.onclick = () => startAddPriority();
+        container.appendChild(addDiv);
+      }
+    }
+
+    // Render steps section in content view
+    function renderContentSteps(container, obj) {
+      const header = document.createElement('div');
+      header.className = 'section-header';
+      header.textContent = 'STEPS';
+      container.appendChild(header);
+
+      if (obj.steps.length === 0 && !(promptMode === 'log' && promptTargetSection === 'steps')) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-hint';
+        empty.textContent = 'no steps logged yet';
+        container.appendChild(empty);
+      }
+
+      // Display steps newest-first
+      for (let displayIdx = 0; displayIdx < obj.steps.length; displayIdx++) {
+        const actualIdx = obj.steps.length - 1 - displayIdx;
+        const step = obj.steps[actualIdx];
+
+        if (promptMode === 'confirm' && promptTargetSection === 'steps' && promptTargetIndex === actualIdx) {
+          const div = document.createElement('div');
+          div.innerHTML = createConfirmRow(`Delete "${step.name}"?`);
+          container.appendChild(div.firstElementChild);
+          continue;
+        }
+
+        const timestamp = formatTimestamp(step.loggedAt);
+        const orderNum = step.orderNumber || (actualIdx + 1);
+        const isEditing = promptMode === 'edit' && promptTargetSection === 'steps' && promptTargetIndex === actualIdx;
+
+        const iconContent = isEditing ? `#${orderNum} ${timestamp} >` : `#${orderNum} ${timestamp}`;
+        const listItem = createListItem({
+          icon: iconContent,
+          iconClass: isEditing ? 'timestamp editing' : 'timestamp',
+          content: step.name,
+          contentEditable: isEditing,
+          meta: '',
+          metaClass: 'compact',
+          selected: false
+        });
+        container.appendChild(listItem);
+      }
+
+      // Add step prompt or button
+      if (promptMode === 'log' && promptTargetSection === 'steps') {
+        const div = document.createElement('div');
+        div.innerHTML = createPromptRow('What did you do?', '');
+        container.appendChild(div.firstElementChild);
       } else {
-        renderObjectiveDetail(container);
+        const addDiv = document.createElement('div');
+        addDiv.className = 'add-option';
+        addDiv.innerHTML = '+ Log a step';
+        addDiv.onclick = () => startLogStep();
+        container.appendChild(addDiv);
       }
+    }
 
-      // Focus input if prompt is active
-      if (promptMode) {
-        setTimeout(() => {
-          // First try contenteditable element (for priorities/steps inline edit)
-          const contentEditable = container.querySelector('[contenteditable="true"]');
-          if (contentEditable) {
-            contentEditable.focus();
-            // Move cursor to end of contenteditable
-            const range = document.createRange();
-            const sel = window.getSelection();
-            range.selectNodeContents(contentEditable);
-            range.collapse(false); // false = collapse to end
-            sel.removeAllRanges();
-            sel.addRange(range);
-
-            // Save on blur (click away)
-            contentEditable.addEventListener('blur', () => {
-              if (promptMode) {
-                processPromptInput(contentEditable.textContent);
-              }
-            }, { once: true });
-            return;
+    // Focus prompt input after render
+    function focusPromptInput() {
+      if (!promptMode) return;
+      setTimeout(() => {
+        const contentEditable = document.querySelector('[contenteditable="true"]');
+        if (contentEditable) {
+          contentEditable.focus();
+          const range = document.createRange();
+          const sel = window.getSelection();
+          range.selectNodeContents(contentEditable);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          contentEditable.addEventListener('blur', () => {
+            if (promptMode) processPromptInput(contentEditable.textContent);
+          }, { once: true });
+          return;
+        }
+        const input = document.querySelector('.prompt-input');
+        if (input) {
+          input.focus();
+          const len = input.value.length;
+          input.setSelectionRange(len, len);
+          if (input.tagName === 'TEXTAREA') {
+            autoResizeTextarea(input);
+            input.addEventListener('input', () => autoResizeTextarea(input));
           }
+          input.addEventListener('blur', () => {
+            if (promptMode) processPromptInput(input.value);
+          }, { once: true });
+        }
+      }, 0);
+    }
 
-          // Fall back to traditional input (for objectives and add prompts)
-          const input = container.querySelector('.prompt-input');
-          if (input) {
-            input.focus();
-            // Move cursor to end
-            const len = input.value.length;
-            input.setSelectionRange(len, len);
-            // Auto-resize if textarea
-            if (input.tagName === 'TEXTAREA') {
-              autoResizeTextarea(input);
-              input.addEventListener('input', () => autoResizeTextarea(input));
-            }
-            // Save on blur (click away)
-            input.addEventListener('blur', () => {
-              if (promptMode) {
-                processPromptInput(input.value);
-              }
-            }, { once: true });
-          }
-        }, 0);
-      }
+    // Main update function
+    function updateView() {
+      renderSideList();
+      renderContentView();
+      focusPromptInput();
+      updateStatusBar();
+    }
+
+    // Legacy alias
+    function updateList() {
+      updateView();
     }
 
     // Render objectives list (top level)
@@ -1495,8 +1768,10 @@
         newItem.priorities = [];
         newItem.steps = [];
         data.objectives.push(newItem);
+        selectedObjectiveIndex = data.objectives.length - 1;
       } else if (promptData.type === 'priority') {
-        currentView.parent.priorities.push(newItem);
+        const obj = data.objectives[selectedObjectiveIndex];
+        if (obj) obj.priorities.push(newItem);
       }
 
       saveData();
@@ -1511,8 +1786,11 @@
         return;
       }
 
+      const obj = data.objectives[selectedObjectiveIndex];
+      if (!obj) return;
+
       // Calculate next order number (max existing + 1, or 1 if no steps)
-      const steps = currentView.parent.steps;
+      const steps = obj.steps;
       const maxOrder = steps.reduce((max, s) => Math.max(max, s.orderNumber || 0), 0);
 
       const newStep = {
@@ -1522,7 +1800,7 @@
         orderNumber: maxOrder + 1
       };
 
-      currentView.parent.steps.push(newStep);
+      obj.steps.push(newStep);
       saveData();
       cancelPrompt();
     }
@@ -1557,12 +1835,14 @@
       if (confirmed && promptData.action === 'delete') {
         if (promptTargetSection === 'objectives') {
           data.objectives.splice(promptTargetIndex, 1);
-          selectedIndex = Math.min(selectedIndex, data.objectives.length - 1);
-          if (selectedIndex < 0) selectedIndex = 0;
+          selectedObjectiveIndex = Math.min(selectedObjectiveIndex, data.objectives.length - 1);
+          if (selectedObjectiveIndex < 0) selectedObjectiveIndex = 0;
         } else if (promptTargetSection === 'priorities') {
-          currentView.parent.priorities.splice(promptTargetIndex, 1);
+          const obj = data.objectives[selectedObjectiveIndex];
+          if (obj) obj.priorities.splice(promptTargetIndex, 1);
         } else if (promptTargetSection === 'steps') {
-          currentView.parent.steps.splice(promptTargetIndex, 1);
+          const obj = data.objectives[selectedObjectiveIndex];
+          if (obj) obj.steps.splice(promptTargetIndex, 1);
         }
         saveData();
       }
@@ -1576,10 +1856,38 @@
       promptData = {};
       promptTargetIndex = -1;
       promptTargetSection = null;
-      refreshView();
+      updateView();
     }
 
-    // Keyboard handling
+    // Refresh view alias
+    function refreshView() {
+      updateView();
+    }
+
+    // ========================================
+    // WHEEL EVENT HANDLER (Scroll Selector)
+    // ========================================
+    document.getElementById('side-list').addEventListener('wheel', (e) => {
+      if (promptMode) return;
+      e.preventDefault();
+
+      const maxIndex = data.objectives.length - 1;
+      if (maxIndex < 0) return;
+
+      if (e.deltaY > 0) {
+        // Scroll down = next objective
+        if (selectedObjectiveIndex < maxIndex) {
+          selectObjective(selectedObjectiveIndex + 1);
+        }
+      } else {
+        // Scroll up = previous objective
+        if (selectedObjectiveIndex > 0) {
+          selectObjective(selectedObjectiveIndex - 1);
+        }
+      }
+    }, { passive: false });
+
+    // Keyboard handling (simplified for split-pane)
     document.addEventListener('keydown', (e) => {
       // Handle prompt input
       if (promptMode === 'add' || promptMode === 'edit' || promptMode === 'refine' || promptMode === 'log') {
@@ -1590,13 +1898,11 @@
         }
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          // First try contenteditable (for priorities/steps inline edit)
           const contentEditable = document.querySelector('[contenteditable="true"]');
           if (contentEditable) {
             processPromptInput(contentEditable.textContent);
             return;
           }
-          // Fall back to traditional input
           const input = document.querySelector('.prompt-input');
           if (input) processPromptInput(input.value);
           return;
@@ -1619,121 +1925,78 @@
         return;
       }
 
-      // Calculate max index for navigation
-      let maxIndex;
-      if (currentView.level === 'objectives') {
-        maxIndex = data.objectives.length - 1;
-      } else {
-        const obj = currentView.parent;
-        // priorities + add-priority + steps + add-step
-        maxIndex = obj.priorities.length + 1 + obj.steps.length;
-      }
+      const maxIndex = data.objectives.length - 1;
 
       switch (e.key) {
         case 'ArrowUp':
         case 'k':
           e.preventDefault();
-          keyboardMode = true;
-          if (selectedIndex < 0) selectedIndex = 0;
-          else if (selectedIndex > 0) selectedIndex--;
-          updateList();
-          updateStatusBar();
+          if (selectedObjectiveIndex > 0) {
+            selectObjective(selectedObjectiveIndex - 1);
+          }
           break;
 
         case 'ArrowDown':
         case 'j':
           e.preventDefault();
-          keyboardMode = true;
-          if (selectedIndex < 0) selectedIndex = 0;
-          else if (selectedIndex < maxIndex) selectedIndex++;
-          updateList();
-          updateStatusBar();
-          break;
-
-        case 'Enter':
-          e.preventDefault();
-          if (keyboardMode && selectedIndex >= 0) handleSelect();
+          if (selectedObjectiveIndex < maxIndex) {
+            selectObjective(selectedObjectiveIndex + 1);
+          }
           break;
 
         case 'a':
           e.preventDefault();
-          if (currentView.level === 'objectives') {
-            startAddObjective();
-          } else {
-            const sel = getSelectionInfo();
-            if (sel.section === 'priorities' || sel.isAdd && sel.section === 'priorities') {
-              startAddPriority();
-            }
-          }
+          startAddObjective();
           break;
 
         case 's':
           e.preventDefault();
-          if (currentView.level === 'objective-detail') {
+          if (data.objectives.length > 0) {
             startLogStep();
           }
           break;
 
-        case 'e':
-          e.preventDefault();
-          startEdit();
-          break;
-
-        case 'r':
-          e.preventDefault();
-          startRefine();
-          break;
-
-        case 'd':
-          e.preventDefault();
-          startDelete();
-          break;
-
-        case 'Escape':
-        case 'Backspace':
-        case 'b':
-          e.preventDefault();
-          handleBack();
-          break;
-
         case 'q':
-          if (currentView.level === 'objectives') {
-            showMessage('session ended.');
-          }
+          showMessage('session ended.');
           break;
-      }
-    });
-
-    // Mouse movement disables keyboard mode (hybrid navigation)
-    document.getElementById('list-container').addEventListener('mousemove', () => {
-      if (keyboardMode) {
-        keyboardMode = false;
-        updateList();
       }
     });
 
     // Edit button click handler (event delegation)
-    document.getElementById('list-container').addEventListener('click', (e) => {
+    document.getElementById('content-body').addEventListener('click', (e) => {
       if (e.target.classList.contains('edit-btn')) {
         e.stopPropagation();
         const section = e.target.dataset.section;
         const index = parseInt(e.target.dataset.index, 10);
+        promptTargetIndex = index;
+        promptTargetSection = section;
 
-        if (section === 'objectives') {
-          selectedIndex = index;
-          startEdit();
-        } else if (section === 'priorities') {
-          // Set selectedIndex so getSelectionInfo() returns the correct priority
-          selectedIndex = index;
-          startEdit();
+        if (section === 'priorities') {
+          const obj = data.objectives[selectedObjectiveIndex];
+          if (obj && obj.priorities[index]) {
+            promptMode = 'edit';
+            promptData = { type: 'priority', item: obj.priorities[index] };
+            updateView();
+          }
         }
       }
     });
 
+    // Update status bar
+    function updateStatusBar() {
+      let shortcuts = '';
+      if (promptMode) {
+        shortcuts = '[Enter] Confirm  [Esc] Cancel';
+      } else {
+        shortcuts = '[↑↓/Scroll] Navigate  [a] Add objective  [s] Log step';
+      }
+      document.getElementById('shortcuts').textContent = shortcuts;
+    }
+
     // Initialize
     async function init() {
       await showIntro();
-      showObjectives();
+      updateView();
     }
 
     init();
