@@ -202,9 +202,11 @@
     .clarity {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 6px;
       padding-right: 8px;
       white-space: nowrap;
+      min-width: 90px;
     }
 
     .clarity-score {
@@ -221,6 +223,26 @@
       letter-spacing: 0.5px;
     }
 
+    .edit-btn {
+      display: none;
+      color: #0891b2;
+      font-size: 11px;
+      padding: 1px 8px;
+      cursor: pointer;
+    }
+
+    .edit-btn:hover {
+      color: #fff;
+    }
+
+    .list-item:hover .clarity-score,
+    .list-item:hover .clarity-badge {
+      display: none;
+    }
+
+    .list-item:hover .edit-btn {
+      display: block;
+    }
 
     .step-timestamp {
       color: #666;
@@ -233,7 +255,8 @@
       cursor: pointer;
     }
 
-    .add-option:hover {
+    .add-option:hover,
+    .add-option.selected {
       background: #1a1a1a;
     }
 
@@ -524,13 +547,14 @@
       return 'clear';
     }
 
-    // Get clarity display HTML with score and badge
+    // Get clarity display HTML with score, badge, and edit button
     // Fuzzy = lighter grey (stands out), Clear = fades to background
-    function getClarityDisplay(item) {
+    // Edit button appears on hover (via CSS)
+    function getClarityDisplay(item, section = 'objectives', index = 0) {
       const clarity = calculateClarity(item);
 
       if (item._clarityLoading) {
-        return '<span class="clarity-score">...</span>';
+        return '<span class="clarity-score">...</span><span class="edit-btn" data-section="' + section + '" data-index="' + index + '">edit</span>';
       }
 
       let score = item.clarityScore;
@@ -544,7 +568,7 @@
         scoreText = '—';
       }
 
-      return `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span>`;
+      return `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
     }
 
     // Pending clarity requests (to batch updates)
@@ -828,7 +852,7 @@
         div.onclick = () => { keyboardMode = false; handleSelect(index); };
 
         const clarity = calculateClarity(obj);
-        div.innerHTML = `<span class="list-item-text">${index + 1}. ${obj.name}</span><span class="clarity">${getClarityDisplay(obj)}</span>`;
+        div.innerHTML = `<span class="list-item-text">${index + 1}. ${obj.name}</span><span class="clarity">${getClarityDisplay(obj, 'objectives', index)}</span>`;
         container.appendChild(div);
         // Trigger async clarity refresh
         refreshClarity(obj);
@@ -903,7 +927,7 @@
         div.onclick = () => { keyboardMode = false; updateList(); };
 
         const clarity = calculateClarity(priority);
-        div.innerHTML = `<span class="list-item-text">- ${priority.name}</span><span class="clarity">${getClarityDisplay(priority)}</span>`;
+        div.innerHTML = `<span class="list-item-text">- ${priority.name}</span><span class="clarity">${getClarityDisplay(priority, 'priorities', index)}</span>`;
         container.appendChild(div);
         globalIndex++;
         // Trigger async clarity refresh
@@ -1473,6 +1497,32 @@
             showMessage('session ended.');
           }
           break;
+      }
+    });
+
+    // Mouse movement disables keyboard mode (hybrid navigation)
+    document.getElementById('list-container').addEventListener('mousemove', () => {
+      if (keyboardMode) {
+        keyboardMode = false;
+        updateList();
+      }
+    });
+
+    // Edit button click handler (event delegation)
+    document.getElementById('list-container').addEventListener('click', (e) => {
+      if (e.target.classList.contains('edit-btn')) {
+        e.stopPropagation();
+        const section = e.target.dataset.section;
+        const index = parseInt(e.target.dataset.index, 10);
+
+        if (section === 'objectives') {
+          selectedIndex = index;
+          startEdit();
+        } else if (section === 'priorities') {
+          promptTargetSection = 'priorities';
+          promptTargetIndex = index;
+          startEdit();
+        }
       }
     });
 
