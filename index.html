@@ -23,7 +23,7 @@
       line-height: 1.4;
     }
 
-    /* Titlebar */
+    /* Titlebar - hidden in browser mode */
     #titlebar {
       display: flex;
       justify-content: space-between;
@@ -32,6 +32,74 @@
       background: #0a0a0a;
       -webkit-app-region: drag;
       flex-shrink: 0;
+    }
+
+    body.browser-mode #titlebar {
+      display: none;
+    }
+
+    body.browser-mode #intro {
+      top: 0;
+      height: 100%;
+    }
+
+    /* Status Reporter */
+    #status-reporter {
+      position: fixed;
+      bottom: 48px;
+      right: 8px;
+      background: #111;
+      border: 1px solid #333;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #888;
+      z-index: 2000;
+      max-width: 300px;
+      display: none;
+    }
+
+    #status-reporter.visible {
+      display: block;
+    }
+
+    #status-reporter .status-title {
+      color: #0891b2;
+      margin-bottom: 4px;
+      font-weight: bold;
+    }
+
+    #status-reporter .status-item {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+    }
+
+    #status-reporter .status-ok { color: #55ff55; }
+    #status-reporter .status-warn { color: #ffff55; }
+    #status-reporter .status-err { color: #ff5555; }
+
+    .status-toggle {
+      position: fixed;
+      bottom: 48px;
+      right: 8px;
+      background: #222;
+      border: 1px solid #444;
+      color: #666;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 10px;
+      font-family: inherit;
+      z-index: 1999;
+    }
+
+    .status-toggle:hover {
+      color: #888;
+      border-color: #555;
+    }
+
+    #status-reporter.visible + .status-toggle,
+    .status-toggle:has(+ #status-reporter.visible) {
+      display: none;
     }
 
     #titlebar-title {
@@ -576,12 +644,105 @@
 
     <!-- Status Bar -->
     <div id="status-bar">
-      <div id="shortcuts">[↑↓/Scroll] Navigate  [a] Add  [e] Edit  [r] Refine  [d] Delete</div>
+      <div id="shortcuts">[↑↓/Scroll] Navigate  [a] Add  [s] Step  [i] Inspect</div>
     </div>
 
     <!-- Message Toast -->
     <div id="message-toast"></div>
+
+    <!-- Status Reporter (toggle with 'i' key) -->
+    <button class="status-toggle" id="status-toggle">inspect</button>
+    <div id="status-reporter">
+      <div class="status-title">System Status <span id="status-close" style="float:right;cursor:pointer;color:#666;">[x]</span></div>
+      <div id="status-items"></div>
+    </div>
   </div>
+
+  <script>
+    // ========================================
+    // PLATFORM DETECTION & STATUS REPORTER
+    // ========================================
+    const isElectron = !!(window.electronAPI);
+    const isBrowser = !isElectron;
+
+    // Status tracking
+    const systemStatus = {
+      platform: isBrowser ? 'browser' : 'electron',
+      localStorage: false,
+      taglines: false,
+      clarityAPI: false,
+      errors: []
+    };
+
+    // Apply browser mode class
+    if (isBrowser) {
+      document.body.classList.add('browser-mode');
+    }
+
+    // Status reporter functions
+    function updateStatusReporter() {
+      const container = document.getElementById('status-items');
+      if (!container) return;
+
+      const items = [
+        { label: 'Platform', value: systemStatus.platform, status: 'ok' },
+        { label: 'Storage', value: systemStatus.localStorage ? 'ok' : 'failed', status: systemStatus.localStorage ? 'ok' : 'err' },
+        { label: 'Taglines', value: systemStatus.taglines ? 'loaded' : 'fallback', status: systemStatus.taglines ? 'ok' : 'warn' },
+        { label: 'Clarity AI', value: systemStatus.clarityAPI ? 'ready' : 'unavailable', status: systemStatus.clarityAPI ? 'ok' : 'warn' }
+      ];
+
+      container.innerHTML = items.map(item =>
+        `<div class="status-item"><span>${item.label}</span><span class="status-${item.status}">${item.value}</span></div>`
+      ).join('');
+
+      if (systemStatus.errors.length > 0) {
+        container.innerHTML += `<div style="margin-top:8px;color:#ff5555;font-size:10px;">Errors: ${systemStatus.errors.length}</div>`;
+        systemStatus.errors.slice(-3).forEach(err => {
+          container.innerHTML += `<div style="color:#ff5555;font-size:9px;word-break:break-all;">${err}</div>`;
+        });
+      }
+    }
+
+    function toggleStatusReporter() {
+      const reporter = document.getElementById('status-reporter');
+      reporter.classList.toggle('visible');
+      updateStatusReporter();
+    }
+
+    function reportError(context, error) {
+      const msg = `[${context}] ${error.message || error}`;
+      systemStatus.errors.push(msg);
+      console.error(msg, error);
+      updateStatusReporter();
+    }
+
+    // Test localStorage
+    try {
+      localStorage.setItem('_test', '1');
+      localStorage.removeItem('_test');
+      systemStatus.localStorage = true;
+    } catch (e) {
+      reportError('Storage', e);
+    }
+
+    // Test Clarity API availability
+    systemStatus.clarityAPI = isElectron && !!window.electronAPI?.calculateClarity;
+
+    // Status toggle button
+    document.getElementById('status-toggle')?.addEventListener('click', toggleStatusReporter);
+    document.getElementById('status-close')?.addEventListener('click', toggleStatusReporter);
+
+    // Keyboard shortcut 'i' for inspect
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'i' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const active = document.activeElement;
+        if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.contentEditable === 'true') return;
+        e.preventDefault();
+        toggleStatusReporter();
+      }
+    });
+
+  </script>
 
   <script>
     // Window controls (Electron)
@@ -630,7 +791,78 @@
           return parsed;
         }
       } catch (e) {}
-      return { objectives: [] };
+      // Return dummy data for development
+      return getDummyData();
+    }
+
+    // Dummy data for development/demo
+    function getDummyData() {
+      const now = new Date();
+      const hourAgo = new Date(now - 60 * 60 * 1000);
+      const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
+      const twoDaysAgo = new Date(now - 2 * 24 * 60 * 60 * 1000);
+
+      return {
+        objectives: [
+          {
+            id: 'obj1',
+            name: 'Learn Rust programming',
+            description: 'Master systems programming with Rust for building fast, reliable software',
+            clarityScore: 78,
+            priorities: [
+              { id: 'p1a', name: 'Complete the Rust Book', description: 'Read through all chapters and do exercises', clarityScore: 85 },
+              { id: 'p1b', name: 'Build a CLI tool', description: 'Create a practical command-line application', clarityScore: 72 },
+              { id: 'p1c', name: 'Contribute to open source', description: 'Find a Rust project and submit a PR', clarityScore: 45 }
+            ],
+            steps: [
+              { id: 's1a', name: 'Installed rustup and cargo', loggedAt: twoDaysAgo.toISOString(), orderNumber: 1 },
+              { id: 's1b', name: 'Finished chapters 1-3 of the Rust Book', loggedAt: dayAgo.toISOString(), orderNumber: 2 },
+              { id: 's1c', name: 'Wrote first ownership examples', loggedAt: hourAgo.toISOString(), orderNumber: 3 }
+            ]
+          },
+          {
+            id: 'obj2',
+            name: 'Get in shape for summer',
+            description: 'Build consistent exercise habits and improve overall fitness',
+            clarityScore: 62,
+            priorities: [
+              { id: 'p2a', name: 'Exercise 4x per week', description: 'Mix of strength training and cardio', clarityScore: 80 },
+              { id: 'p2b', name: 'Track nutrition', description: 'Log meals and aim for balanced macros', clarityScore: 55 }
+            ],
+            steps: [
+              { id: 's2a', name: 'Signed up for gym membership', loggedAt: twoDaysAgo.toISOString(), orderNumber: 1 },
+              { id: 's2b', name: 'Did first workout - legs and core', loggedAt: dayAgo.toISOString(), orderNumber: 2 },
+              { id: 's2c', name: 'Morning run - 2 miles', loggedAt: now.toISOString(), orderNumber: 3 }
+            ]
+          },
+          {
+            id: 'obj3',
+            name: 'Launch side project',
+            description: '',
+            clarityScore: 28,
+            priorities: [
+              { id: 'p3a', name: 'Define MVP scope', description: '', clarityScore: 35 }
+            ],
+            steps: [
+              { id: 's3a', name: 'Brainstormed initial ideas', loggedAt: dayAgo.toISOString(), orderNumber: 1 }
+            ]
+          },
+          {
+            id: 'obj4',
+            name: 'Read more books',
+            description: 'Read at least 2 books per month across different genres',
+            clarityScore: 70,
+            priorities: [
+              { id: 'p4a', name: 'Set daily reading time', description: '30 minutes before bed', clarityScore: 90 },
+              { id: 'p4b', name: 'Join a book club', description: 'Find local or online community', clarityScore: 40 }
+            ],
+            steps: [
+              { id: 's4a', name: 'Finished "Atomic Habits"', loggedAt: twoDaysAgo.toISOString(), orderNumber: 1 },
+              { id: 's4b', name: 'Started "Deep Work"', loggedAt: hourAgo.toISOString(), orderNumber: 2 }
+            ]
+          }
+        ]
+      };
     }
 
     // Migrate from old hierarchy
@@ -884,6 +1116,17 @@
     }
 
     async function processClarityQueue() {
+      // Skip clarity processing in browser mode (no Electron API)
+      if (!window.electronAPI?.calculateClarity) {
+        clarityQueue.forEach(item => {
+          item._clarityQueued = false;
+          item._clarityLoading = false;
+        });
+        clarityQueue = [];
+        clarityProcessing = false;
+        return;
+      }
+
       while (clarityQueue.length > 0) {
         const item = clarityQueue.shift();
         item._clarityQueued = false;
@@ -895,22 +1138,22 @@
 
         try {
           item._clarityLoading = true;
-          console.log('🤖 Requesting clarity for:', item.name);
+          console.log('Requesting clarity for:', item.name);
 
           const result = await window.electronAPI.calculateClarity(item.name, item.description || '');
           item._clarityLoading = false;
 
           if (result.error) {
-            console.log('❌ Clarity error:', result.error);
+            console.log('Clarity error:', result.error);
           } else if (result.score !== null) {
-            console.log('✅ Clarity score:', result.score + '%');
+            console.log('Clarity score:', result.score + '%');
             item.clarityScore = result.score;
             item._clarityKey = cacheKey;
             saveData();
           }
         } catch (err) {
           item._clarityLoading = false;
-          console.log('❌ Clarity API unavailable:', err.message);
+          reportError('Clarity', err);
         }
       }
 
@@ -941,14 +1184,29 @@
       return str.charAt(0).toUpperCase() + str.slice(1);
     }
 
+    // Embedded taglines fallback (works without network/CORS)
+    const FALLBACK_TAGLINES = [
+      'Proceed.',
+      'Begin where you are.',
+      'One step at a time.',
+      'Clarity through action.',
+      'Define. Refine. Execute.'
+    ];
+
     // Show intro animation (skippable with click or spacebar)
     async function showIntro() {
-      let tagline = 'Proceed.';
+      let tagline = FALLBACK_TAGLINES[Math.floor(Math.random() * FALLBACK_TAGLINES.length)];
       try {
         const response = await fetch('taglines.json');
-        const taglines = await response.json();
-        tagline = taglines[Math.floor(Math.random() * taglines.length)];
-      } catch (e) {}
+        if (response.ok) {
+          const taglines = await response.json();
+          tagline = taglines[Math.floor(Math.random() * taglines.length)];
+          systemStatus.taglines = true;
+        }
+      } catch (e) {
+        // Silently use fallback - common in file:// mode
+        console.log('Using fallback taglines (fetch unavailable)');
+      }
 
       const introText = document.getElementById('intro-text');
       const introTagline = document.getElementById('intro-tagline');
@@ -2029,6 +2287,11 @@
     // ========================================
     // WHEEL EVENT HANDLER (Scroll Selector)
     // ========================================
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    let scrollAccumulator = 0;
+    const SCROLL_THRESHOLD = isMac ? 50 : 0; // Mac trackpads need accumulation, mice don't
+    let scrollResetTimeout = null;
+
     document.getElementById('side-list').addEventListener('wheel', (e) => {
       if (promptMode) return;
       e.preventDefault();
@@ -2036,14 +2299,31 @@
       const maxIndex = data.objectives.length - 1;
       if (maxIndex < 0) return;
 
-      if (e.deltaY > 0) {
-        // Scroll down = next objective
-        if (selectedObjectiveIndex < maxIndex) {
-          selectObjective(selectedObjectiveIndex + 1);
+      // Mac: accumulate delta; Windows/Linux: respond immediately
+      if (SCROLL_THRESHOLD > 0) {
+        scrollAccumulator += e.deltaY;
+
+        clearTimeout(scrollResetTimeout);
+        scrollResetTimeout = setTimeout(() => {
+          scrollAccumulator = 0;
+        }, 150);
+
+        if (scrollAccumulator > SCROLL_THRESHOLD) {
+          scrollAccumulator = 0;
+          if (selectedObjectiveIndex < maxIndex) {
+            selectObjective(selectedObjectiveIndex + 1);
+          }
+        } else if (scrollAccumulator < -SCROLL_THRESHOLD) {
+          scrollAccumulator = 0;
+          if (selectedObjectiveIndex > 0) {
+            selectObjective(selectedObjectiveIndex - 1);
+          }
         }
       } else {
-        // Scroll up = previous objective
-        if (selectedObjectiveIndex > 0) {
+        // Immediate response for mice
+        if (e.deltaY > 0 && selectedObjectiveIndex < maxIndex) {
+          selectObjective(selectedObjectiveIndex + 1);
+        } else if (e.deltaY < 0 && selectedObjectiveIndex > 0) {
           selectObjective(selectedObjectiveIndex - 1);
         }
       }
