@@ -226,9 +226,11 @@ body.browser-mode #intro {
   flex: 1;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 30vh 0 10px 0;
+  padding: 30vh 0 70vh 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  scroll-snap-type: y mandatory;
+  scroll-padding-top: 30vh;
 }
 
 #side-list-items::-webkit-scrollbar {
@@ -245,6 +247,7 @@ body.browser-mode #intro {
   position: relative;
   min-width: 0;
   overflow: hidden;
+  scroll-snap-align: start;
 }
 
 .side-item:hover {

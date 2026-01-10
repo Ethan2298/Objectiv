@@ -1487,46 +1487,73 @@
     }
 
     // ========================================
-    // WHEEL EVENT HANDLER (Scroll Navigation)
-    // Scroll to navigate/select items, with 30vh aesthetic air
+    // SCROLL-SNAP DIAL NAVIGATION
+    // Items scroll naturally with snap, selection follows scroll position
     // ========================================
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-    let scrollAccumulator = 0;
-    const SCROLL_THRESHOLD = isMac ? 50 : 0;
-    let scrollResetTimeout = null;
 
-    document.addEventListener('wheel', (e) => {
-      const sideList = document.getElementById('side-list');
-      const contentView = document.getElementById('content-view');
-      if (!sideList || !contentView) return;
+    // Detect which item is at the snap line and update selection
+    function updateSelectionFromScroll() {
+      const container = document.getElementById('side-list-items');
+      if (!container) return;
 
-      const sideListRect = sideList.getBoundingClientRect();
-      const isOverSideList = e.clientX >= sideListRect.left && e.clientX <= sideListRect.right;
+      const items = container.querySelectorAll('.side-item');
+      if (!items.length) return;
 
-      // Content area scrolls naturally
-      if (!isOverSideList) return;
+      const SideListState = window.Objectiv?.SideListState;
+      if (!SideListState) return;
 
-      // Side list: wheel navigates selection
-      if (promptMode) return;
-      e.preventDefault();
+      // The snap line is at 30vh from container top (due to scroll-padding-top)
+      const containerRect = container.getBoundingClientRect();
+      const snapLineY = containerRect.top + (window.innerHeight * 0.30);
 
-      if (SCROLL_THRESHOLD > 0) {
-        scrollAccumulator += e.deltaY;
-        clearTimeout(scrollResetTimeout);
-        scrollResetTimeout = setTimeout(() => { scrollAccumulator = 0; }, 150);
+      // Find the item closest to the snap line
+      let closestItem = null;
+      let closestDistance = Infinity;
+      let closestIndex = 0;
 
-        if (scrollAccumulator > SCROLL_THRESHOLD) {
-          scrollAccumulator = 0;
-          navigateSideList(1);
-        } else if (scrollAccumulator < -SCROLL_THRESHOLD) {
-          scrollAccumulator = 0;
-          navigateSideList(-1);
+      items.forEach((item, idx) => {
+        const itemRect = item.getBoundingClientRect();
+        const distance = Math.abs(itemRect.top - snapLineY);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestItem = item;
+          closestIndex = idx;
         }
-      } else {
-        if (e.deltaY > 0) navigateSideList(1);
-        else if (e.deltaY < 0) navigateSideList(-1);
+      });
+
+      if (closestItem && closestIndex !== SideListState.getSelectedIndex()) {
+        // Update state without re-rendering (just update selection visually)
+        SideListState.setSelectedIndex(closestIndex);
+
+        // Update visual selection
+        items.forEach((item, idx) => {
+          item.classList.toggle('selected', idx === closestIndex);
+        });
+
+        // Update content view for the new selection
+        const selectedItem = SideListState.getSelectedItem();
+        if (selectedItem && selectedItem.type === SideListState.ItemType.OBJECTIVE) {
+          currentObjectiveIndex = selectedItem.index;
+          renderContentView();
+        }
       }
-    }, { passive: false });
+    }
+
+    // Listen for scroll snap changes (modern browsers)
+    const sideListItems = document.getElementById('side-list-items');
+    if (sideListItems) {
+      // Use scrollsnapchange if available, otherwise fall back to scroll + debounce
+      if ('onscrollsnapchange' in window) {
+        sideListItems.addEventListener('scrollsnapchange', updateSelectionFromScroll);
+      } else {
+        // Fallback: debounced scroll handler
+        let scrollTimeout;
+        sideListItems.addEventListener('scroll', () => {
+          clearTimeout(scrollTimeout);
+          scrollTimeout = setTimeout(updateSelectionFromScroll, 50);
+        }, { passive: true });
+      }
+    }
 
     // ========================================
     // UNIFIED EDIT CONTROLLER
@@ -1859,6 +1886,14 @@
       }
 
       updateSideListSelection();
+
+      // Scroll the item to the snap position (dial behavior)
+      const container = document.getElementById('side-list-items');
+      const selectedIdx = SideListState.getSelectedIndex();
+      const items = container?.querySelectorAll('.side-item');
+      if (items && items[selectedIdx]) {
+        items[selectedIdx].scrollIntoView({ block: 'start' });
+      }
     }
 
     // Activate (Enter) the selected item
