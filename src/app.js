@@ -18,6 +18,7 @@ import * as Clarity from './clarity.js';
 import * as ListItem from './components/list-item.js';
 import * as EditController from './controllers/edit-controller.js';
 import * as FolderExplorer from './components/folder-explorer.js';
+import * as Markdown from './utils/markdown.js';
 
 // ========================================
 // Re-export for global access
@@ -33,7 +34,8 @@ window.Objectiv = {
   Clarity,
   ListItem,
   EditController,
-  FolderExplorer
+  FolderExplorer,
+  Markdown
 };
 
 // ========================================
@@ -80,7 +82,8 @@ export {
   Clarity,
   ListItem,
   EditController,
-  FolderExplorer
+  FolderExplorer,
+  Markdown
 };
 
 export default {
@@ -92,5 +95,6 @@ export default {
   ListItem,
   EditController,
   FolderExplorer,
+  Markdown,
   init
 };

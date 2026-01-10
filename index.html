@@ -199,6 +199,11 @@
 
     // Navigation state (simplified for split-pane)
     let selectedObjectiveIndex = 0;  // Which objective is selected in side list
+    let selectedFilePath = null;     // Currently selected file for note viewing
+    let selectedFileContent = null;  // Cached content of selected file
+
+    // View mode: 'objective' or 'file'
+    let viewMode = 'objective';
 
     // Prompt state
     let promptMode = null; // null, 'add', 'edit', 'refine', 'log', 'confirm'
@@ -880,6 +885,8 @@
           // Commit any current edit before switching objectives
           commitEditInPlace();
           selectedObjectiveIndex = itemData.index;
+          viewMode = 'objective';
+          selectedFilePath = null;
           renderContentView();
           updateSideListSelection();
           break;
@@ -906,9 +913,8 @@
           break;
 
         case ItemType.FILE:
-          showMessage(`Selected: ${itemData.name}`);
+          await selectFile(itemData.path, itemData.name);
           updateSideListSelection();
-          // Future: open file in content area
           break;
       }
     }
@@ -1005,12 +1011,85 @@
       }
 
       selectedObjectiveIndex = index;
+      viewMode = 'objective';
+      selectedFilePath = null;
       updateSideListSelection();
       renderContentView();
     }
 
-    // Render the content view (selected objective's details)
+    // Select file by path (for note viewing)
+    async function selectFile(filePath, fileName) {
+      // Check if file reading is available
+      if (!window.electronAPI?.folderExplorer?.readFile) {
+        showMessage('File reading not available');
+        return;
+      }
+
+      // Read the file content
+      const result = await window.electronAPI.folderExplorer.readFile(filePath);
+      if (!result.success) {
+        showMessage(`Error: ${result.error}`);
+        return;
+      }
+
+      // Update state
+      selectedFilePath = filePath;
+      selectedFileContent = result.content;
+      viewMode = 'file';
+
+      // Render the file view
+      renderContentView();
+    }
+
+    // Render the content view (selected objective's details OR file content)
     function renderContentView() {
+      if (viewMode === 'file' && selectedFilePath) {
+        renderFileView();
+        return;
+      }
+      renderObjectiveView();
+    }
+
+    // Render file content as markdown
+    function renderFileView() {
+      const headerTitle = document.getElementById('content-header-title');
+      const headerDesc = document.getElementById('content-header-description');
+      const body = document.getElementById('content-body');
+
+      // Get filename from path
+      const fileName = selectedFilePath.split('/').pop();
+
+      // Header shows filename
+      headerTitle.textContent = fileName;
+      headerDesc.innerHTML = `<span class="file-header-path">${selectedFilePath}</span>`;
+
+      // Check if it's a markdown file or text file
+      const Markdown = window.Objectiv?.Markdown;
+      if (!Markdown) {
+        body.innerHTML = `<pre style="color:#888;white-space:pre-wrap;padding:16px;">${escapeHtml(selectedFileContent || '')}</pre>`;
+        return;
+      }
+
+      const isMarkdown = Markdown.isMarkdownFile(fileName);
+      const isText = Markdown.isTextFile(fileName);
+
+      if (!isText) {
+        body.innerHTML = '<div class="markdown-content"><p style="color:#666;">Binary file - cannot display</p></div>';
+        return;
+      }
+
+      if (isMarkdown) {
+        // Render as markdown
+        const html = Markdown.parseMarkdown(selectedFileContent || '');
+        body.innerHTML = `<div class="markdown-content">${html}</div>`;
+      } else {
+        // Render as plain text with code styling
+        body.innerHTML = `<div class="markdown-content"><pre class="md-code-block"><code>${escapeHtml(selectedFileContent || '')}</code></pre></div>`;
+      }
+    }
+
+    // Render objective view (original content view)
+    function renderObjectiveView() {
       const headerTitle = document.getElementById('content-header-title');
       const headerDesc = document.getElementById('content-header-description');
       const body = document.getElementById('content-body');
@@ -1538,9 +1617,15 @@
 
         // Update content view for the new selection
         const selectedItem = SideListState.getSelectedItem();
-        if (selectedItem && selectedItem.type === SideListState.ItemType.OBJECTIVE) {
-          selectedObjectiveIndex = selectedItem.index;
-          renderContentView();
+        if (selectedItem) {
+          if (selectedItem.type === SideListState.ItemType.OBJECTIVE) {
+            selectedObjectiveIndex = selectedItem.index;
+            viewMode = 'objective';
+            selectedFilePath = null;
+            renderContentView();
+          } else if (selectedItem.type === SideListState.ItemType.FILE) {
+            selectFile(selectedItem.path, selectedItem.name);
+          }
         }
       }
     }
@@ -1875,10 +1960,17 @@
       const item = SideListState.getSelectedItem();
       const ItemType = SideListState.ItemType;
 
-      // If navigated to an objective, update the content view
-      if (item && item.type === ItemType.OBJECTIVE) {
-        selectedObjectiveIndex = item.index;
-        renderContentView();
+      // Update content view based on selected item type
+      if (item) {
+        if (item.type === ItemType.OBJECTIVE) {
+          selectedObjectiveIndex = item.index;
+          viewMode = 'objective';
+          selectedFilePath = null;
+          renderContentView();
+        } else if (item.type === ItemType.FILE) {
+          // Load and display file content
+          await selectFile(item.path, item.name);
+        }
       }
 
       updateSideListSelection();
@@ -1928,8 +2020,7 @@
           break;
 
         case ItemType.FILE:
-          showMessage(`Selected: ${item.name}`);
-          // Future: open in content area
+          await selectFile(item.path, item.name);
           break;
       }
     }

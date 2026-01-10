@@ -185,6 +185,16 @@ function createWindow() {
       return { success: false, error: err.message };
     }
   });
+
+  // Read file contents
+  ipcMain.handle('folder-explorer:read-file', async (event, filePath) => {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      return { success: true, content };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 app.whenReady().then(createWindow);

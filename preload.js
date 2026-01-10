@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readDir: (dirPath) => ipcRenderer.invoke('folder-explorer:read-dir', dirPath),
     getHome: () => ipcRenderer.invoke('folder-explorer:get-home'),
     exists: (filePath) => ipcRenderer.invoke('folder-explorer:exists', filePath),
-    getInfo: (filePath) => ipcRenderer.invoke('folder-explorer:get-info', filePath)
+    getInfo: (filePath) => ipcRenderer.invoke('folder-explorer:get-info', filePath),
+    readFile: (filePath) => ipcRenderer.invoke('folder-explorer:read-file', filePath)
   }
 });
