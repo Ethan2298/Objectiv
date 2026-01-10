@@ -4,605 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Objectiv.go</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      background: #000;
-      color: #e0e0e0;
-      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-      height: 100vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      font-size: 14px;
-      line-height: 1.4;
-    }
-
-    /* Titlebar - hidden in browser mode */
-    #titlebar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      height: 32px;
-      background: #0a0a0a;
-      -webkit-app-region: drag;
-      flex-shrink: 0;
-    }
-
-    body.browser-mode #titlebar {
-      display: none;
-    }
-
-    body.browser-mode #intro {
-      top: 0;
-      height: 100%;
-    }
-
-    /* Status Reporter */
-    #status-reporter {
-      position: fixed;
-      bottom: 48px;
-      right: 8px;
-      background: #111;
-      border: 1px solid #333;
-      padding: 8px 12px;
-      font-size: 11px;
-      color: #888;
-      z-index: 2000;
-      max-width: 300px;
-      display: none;
-    }
-
-    #status-reporter.visible {
-      display: block;
-    }
-
-    #status-reporter .status-title {
-      color: #0891b2;
-      margin-bottom: 4px;
-      font-weight: bold;
-    }
-
-    #status-reporter .status-item {
-      display: flex;
-      justify-content: space-between;
-      margin: 2px 0;
-    }
-
-    #status-reporter .status-ok { color: #55ff55; }
-    #status-reporter .status-warn { color: #ffff55; }
-    #status-reporter .status-err { color: #ff5555; }
-
-    .status-toggle {
-      position: fixed;
-      bottom: 48px;
-      right: 8px;
-      background: #222;
-      border: 1px solid #444;
-      color: #666;
-      padding: 4px 8px;
-      cursor: pointer;
-      font-size: 10px;
-      font-family: inherit;
-      z-index: 1999;
-    }
-
-    .status-toggle:hover {
-      color: #888;
-      border-color: #555;
-    }
-
-    #status-reporter.visible + .status-toggle,
-    .status-toggle:has(+ #status-reporter.visible) {
-      display: none;
-    }
-
-    #titlebar-title {
-      padding-left: 12px;
-      font-size: 12px;
-      color: #666;
-    }
-
-    #window-controls {
-      display: flex;
-      -webkit-app-region: no-drag;
-    }
-
-    .window-btn {
-      width: 46px;
-      height: 32px;
-      border: none;
-      background: transparent;
-      color: #888;
-      font-family: 'Segoe MDL2 Assets', sans-serif;
-      font-size: 10px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .window-btn:hover {
-      background: #333;
-    }
-
-    .window-btn.close:hover {
-      background: #e81123;
-      color: #fff;
-    }
-
-    /* Main content wrapper */
-    #content-wrapper {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-
-    /* Intro Screen */
-    #intro {
-      position: fixed;
-      top: 32px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - 32px);
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-
-    #intro-text {
-      font-size: 0.8rem;
-      color: #e0e0e0;
-    }
-
-    #intro-cursor {
-      display: inline-block;
-      width: 0.6em;
-      height: 1em;
-      background: #e0e0e0;
-      margin-left: 2px;
-      animation: blink 0.7s infinite;
-      vertical-align: text-bottom;
-    }
-
-    @keyframes blink {
-      0%, 50% { opacity: 1; }
-      51%, 100% { opacity: 0; }
-    }
-
-    /* Main App - Split Pane Layout (Centered both ways) */
-    #app {
-      display: none;
-      flex-direction: row;
-      width: 90%;
-      max-width: 1200px;
-      height: 500px;
-      padding-bottom: 40px;
-    }
-
-    /* Side List (left pane - 1/3 width) */
-    #side-list {
-      width: 33.333%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #side-list-items {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 0;
-    }
-
-    /* Side list item with ball indicator */
-    .side-item {
-      display: flex;
-      align-items: center;
-      padding: 2px 8px;
-      cursor: pointer;
-      color: #888;
-      transition: color 0.15s, background 0.15s;
-      position: relative;
-    }
-
-    .side-item:hover {
-      color: #e0e0e0;
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .side-item.selected {
-      color: #e0e0e0;
-    }
-
-    .side-item.editing {
-      color: #e0e0e0;
-    }
-
-    .side-item-icon {
-      color: #0891b2;
-      margin-right: 4px;
-      flex-shrink: 0;
-      min-width: 12px;
-    }
-
-    .side-item-name {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .side-item-name[contenteditable] {
-      outline: none;
-      caret-color: #0891b2;
-      min-width: 50px;
-      white-space: pre-wrap;
-      overflow: visible;
-      text-overflow: clip;
-    }
-
-    .side-item-name[contenteditable]:empty:before {
-      content: attr(data-placeholder);
-      color: #555;
-      font-style: italic;
-    }
-
-    .side-item-indicator {
-      margin-left: 5px;
-      opacity: 0;
-      color: #0891b2;
-      font-size: 13px;
-      transition: opacity 0.15s;
-      flex-shrink: 0;
-    }
-
-    .side-item.selected .side-item-indicator {
-      opacity: 1;
-    }
-
-    .side-item.editing .side-item-indicator {
-      display: none;
-    }
-
-    /* Content View (right pane - 2/3 width) */
-    #content-view {
-      width: 66.666%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    #content-header {
-      padding: 12px 20px;
-      flex-shrink: 0;
-    }
-
-    #content-header-title {
-      font-weight: bold;
-      color: #fff;
-      font-size: 16px;
-    }
-
-    #content-header-description {
-      color: #666;
-      margin-top: 4px;
-      font-size: 13px;
-    }
-
-    #content-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 0 20px;
-    }
-
-    /* Header */
-    #header {
-      padding: 8px 12px;
-      cursor: pointer;
-    }
-
-    #header:hover {
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    #header-title {
-      font-weight: bold;
-      color: #fff;
-    }
-
-    #header-clarity {
-      color: #666;
-      font-size: 12px;
-      margin-top: 2px;
-    }
-
-    .clarity-fuzzy,
-    .clarity-less-fuzzy,
-    .clarity-clear,
-    .clarity-very-clear {
-      color: #888;
-    }
-
-    #header-description {
-      color: #888;
-      margin-top: 4px;
-    }
-
-    /* List Container */
-    #list-container {
-      overflow-y: auto;
-      padding: 0 12px;
-      margin: 0.5rem 0;
-    }
-
-    /* Section subheaders */
-    .section-header {
-      color: #555;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      padding: 8px 8px 4px 8px;
-      margin-top: 8px;
-    }
-
-    .section-header:first-child {
-      margin-top: 0;
-    }
-
-    /* ========================================
-       MODULAR LIST ITEM COMPONENT
-       Three-column layout: icon | content | meta
-       ======================================== */
-    .list-item {
-      padding: 2px 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: flex-start;
-      gap: 0;
-    }
-
-    .list-item:hover {
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .list-item.selected {
-      background: #1a1a1a;
-    }
-
-    /* Icon Column - fixed width for alignment */
-    .list-item-icon {
-      color: #888;
-      flex-shrink: 0;
-      min-width: 20px;
-      text-align: left;
-    }
-
-    .list-item-icon.editing {
-      color: #0891b2;
-    }
-
-    .list-item-icon.numeric {
-      min-width: 24px;
-    }
-
-    /* Content Column - flexible, wraps text */
-    .list-item-content {
-      flex: 1;
-      min-width: 0;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-      cursor: text;
-    }
-
-    .list-item-content[contenteditable="true"] {
-      outline: none;
-      caret-color: #0891b2;
-      cursor: text;
-    }
-
-    .list-item-content[contenteditable="true"]:empty:before {
-      content: attr(data-placeholder);
-      color: #555;
-      font-style: italic;
-    }
-
-    /* Meta Column - right-aligned, fixed minimum width */
-    .list-item-meta {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 6px;
-      padding-left: 8px;
-      white-space: nowrap;
-      min-width: 90px;
-      flex-shrink: 0;
-    }
-
-    .list-item-meta.compact {
-      min-width: auto;
-    }
-
-    .step-timestamp {
-      color: #666;
-      font-size: 12px;
-    }
-
-    /* Clarity Badge (used in meta column) */
-    .clarity-score {
-      color: #888;
-      font-size: 12px;
-      min-width: 35px;
-      text-align: right;
-    }
-
-    .clarity-badge {
-      font-size: 10px;
-      padding: 1px 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .edit-btn {
-      display: none;
-      color: #666;
-      font-size: 11px;
-      padding: 1px 8px;
-      cursor: pointer;
-      opacity: 0.5;
-    }
-
-    .edit-btn:hover {
-      color: #888;
-      opacity: 0.8;
-    }
-
-    /* Hover behavior: hide clarity, show edit */
-    .list-item:hover .clarity-score,
-    .list-item:hover .clarity-badge {
-      display: none;
-    }
-
-    .list-item:hover .edit-btn {
-      display: block;
-    }
-
-    /* Legacy support - kept for header clarity display */
-    .clarity {
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 6px;
-      padding-right: 8px;
-      white-space: nowrap;
-      min-width: 90px;
-    }
-
-    .add-option {
-      color: #666;
-      padding: 2px 8px;
-      cursor: pointer;
-    }
-
-    .add-option:hover,
-    .add-option.selected {
-      color: #0891b2;
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .add-option.disabled {
-      color: #555;
-      cursor: default;
-    }
-
-    .add-option.disabled:hover {
-      background: transparent;
-    }
-
-    /* Inline prompt row */
-    .prompt-row {
-      padding: 2px 8px;
-      background: #000;
-      border: 1px solid #0891b2;
-    }
-
-    .prompt-label {
-      color: #0891b2;
-      font-size: 12px;
-      margin-bottom: 2px;
-    }
-
-    .prompt-input-wrap {
-      display: flex;
-      align-items: flex-start;
-    }
-
-    .prompt-prefix {
-      color: #0891b2;
-      margin-right: 4px;
-      margin-top: 2px;
-    }
-
-    .prompt-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: #e0e0e0;
-      font-family: inherit;
-      font-size: inherit;
-      line-height: 1.4;
-      outline: none;
-      caret-color: #0891b2;
-      padding: 0;
-      resize: none;
-      overflow: hidden;
-      min-height: 1.4em;
-    }
-
-    /* Confirm row */
-    .confirm-row {
-      padding: 2px 8px;
-      background: #000;
-      border: 1px solid #ffff55;
-    }
-
-    .confirm-text {
-      color: #ffff55;
-    }
-
-    .confirm-hint {
-      color: #888;
-      font-size: 12px;
-    }
-
-    /* Status Bar */
-    #status-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      padding: 8px 12px;
-      color: #888;
-      background: #000;
-      border-top: 1px solid #333;
-    }
-
-    #shortcuts {
-      color: #666;
-      font-size: 13px;
-    }
-
-    /* Message toast */
-    #message-toast {
-      position: fixed;
-      bottom: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #1a1a1a;
-      border: 1px solid #55ff55;
-      color: #55ff55;
-      padding: 8px 16px;
-      display: none;
-      z-index: 100;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    .empty-hint {
-      color: #444;
-      font-style: italic;
-      padding: 2px 8px;
-    }
-  </style>
+  <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
   <!-- Titlebar -->
@@ -755,14 +157,11 @@
 
   <script>
     // Data
-    const STORAGE_KEY = 'life-data';
+    const STORAGE_KEY = 'objectiv-data';
     let data = loadData();
 
     // Navigation state (simplified for split-pane)
     let selectedObjectiveIndex = 0;  // Which objective is selected in side list
-    let selectedContentIndex = 0;    // Which item is selected in content view
-    let contentSection = 'priorities'; // 'priorities' or 'steps' in content view
-    let focusPane = 'side-list';     // 'side-list' or 'content-view'
 
     // Prompt state
     let promptMode = null; // null, 'add', 'edit', 'refine', 'log', 'confirm'
@@ -1281,89 +680,6 @@
       });
     }
 
-    // Update header display
-    function updateHeader() {
-      const { level, parent } = currentView;
-      const titleEl = document.getElementById('header-title');
-      const clarityEl = document.getElementById('header-clarity');
-      const descEl = document.getElementById('header-description');
-
-      if (level === 'objectives') {
-        titleEl.textContent = 'OBJECTIVES';
-        clarityEl.textContent = '';
-        clarityEl.className = '';
-        descEl.textContent = '';
-      } else if (parent) {
-        titleEl.textContent = parent.name;
-        const clarity = calculateClarity(parent);
-        clarityEl.textContent = getClarityDisplay(parent);
-        clarityEl.className = `clarity-${clarity.replace(/\s+/g, '-')}`;
-        descEl.textContent = parent.description ? `"${parent.description}"` : '';
-        // Trigger async clarity refresh if needed
-        refreshClarity(parent);
-      }
-    }
-
-    // Get total selectable items in current view
-    function getTotalSelectableItems() {
-      if (currentView.level === 'objectives') {
-        return data.objectives.length;
-      } else {
-        const obj = currentView.parent;
-        // priorities + add-priority + steps + add-step
-        return obj.priorities.length + 1 + obj.steps.length + 1;
-      }
-    }
-
-    // Get what's selected (for objective-detail view)
-    function getSelectionInfo() {
-      if (currentView.level === 'objectives') {
-        return { section: 'objectives', index: selectedIndex };
-      }
-
-      const obj = currentView.parent;
-      const prioritiesCount = obj.priorities.length;
-      const stepsCount = obj.steps.length;
-
-      // Layout: priorities (0..n-1), add-priority (n), steps (n+1..n+1+m-1), add-step (n+1+m)
-      // Note: Steps are displayed newest-first (reversed), so we convert display index to array index
-      if (selectedIndex <= prioritiesCount) {
-        if (selectedIndex === prioritiesCount) {
-          return { section: 'priorities', index: -1, isAdd: true };
-        }
-        return { section: 'priorities', index: selectedIndex };
-      } else {
-        const stepsStartIndex = prioritiesCount + 1;
-        const displayIndex = selectedIndex - stepsStartIndex;
-        if (displayIndex >= stepsCount) {
-          return { section: 'steps', index: -1, isAdd: true };
-        }
-        // Convert display index (0 = newest at top) to array index (0 = oldest)
-        const actualIndex = stepsCount - 1 - displayIndex;
-        return { section: 'steps', index: actualIndex };
-      }
-    }
-
-    // Create inline prompt HTML
-    function createPromptRow(label, defaultValue = '') {
-      const escaped = defaultValue.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return `
-        <div class="prompt-row">
-          <div class="prompt-label">${label}</div>
-          <div class="prompt-input-wrap">
-            <span class="prompt-prefix">&gt;</span>
-            <textarea class="prompt-input" rows="1" autocomplete="off" spellcheck="false">${escaped}</textarea>
-          </div>
-        </div>
-      `;
-    }
-
-    // Auto-resize textarea to fit content
-    function autoResizeTextarea(textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = textarea.scrollHeight + 'px';
-    }
-
     // Create confirm row HTML
     function createConfirmRow(text) {
       return `
@@ -1421,7 +737,7 @@
     // Select objective without re-rendering side list
     function selectObjective(index) {
       // Commit any current edit before switching objectives
-      commitCurrentEdit();
+      commitEditInPlace();
 
       if (index === selectedObjectiveIndex) return;
 
@@ -1497,21 +813,28 @@
         let textContent = priority.name;
         if (isRefining) textContent = priority.description || '';
 
+        // Get clarity display without edit button for priorities
+        const clarity = calculateClarity(priority);
+        let clarityMeta = '';
+        if (priority._clarityLoading) {
+          clarityMeta = '<span class="clarity-score">...</span>';
+        } else {
+          const scoreText = priority.clarityScore !== undefined ? `${priority.clarityScore}%` : '—';
+          clarityMeta = `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span>`;
+        }
+
         const listItem = createListItem({
           icon: isInEditMode ? '>' : '-',
           iconClass: isInEditMode ? 'editing' : '',
           content: textContent,
           contentEditable: isInEditMode,
-          meta: isInEditMode ? '' : getClarityMeta(priority, 'priorities', index),
-          selected: false,
-          onClick: (e) => {
-            if (e.target.classList.contains('edit-btn')) return;
-            // Start inline editing on click (handles saving current edit)
-            const listItemEl = e.currentTarget;
-            const contentSpan = listItemEl.querySelector('.list-item-content');
-            startInlineEditInPlace('priorities', index, listItemEl, contentSpan);
-          }
+          meta: clarityMeta,
+          selected: false
         });
+
+        // Add data attributes for edit controller
+        listItem.dataset.section = 'priorities';
+        listItem.dataset.index = index;
 
         // Add placeholder for new items
         if (isAdding) {
@@ -1577,16 +900,14 @@
           iconClass: isInEditMode ? 'editing' : '',
           content: step.name,
           contentEditable: isInEditMode,
-          meta: isInEditMode ? '' : `<span class="step-timestamp">${stepMeta}</span>`,
+          meta: `<span class="step-timestamp">${stepMeta}</span>`,
           metaClass: 'compact',
-          selected: false,
-          onClick: (e) => {
-            // Start inline editing on click (handles saving current edit)
-            const listItemEl = e.currentTarget;
-            const contentSpan = listItemEl.querySelector('.list-item-content');
-            startInlineEditInPlace('steps', actualIdx, listItemEl, contentSpan);
-          }
+          selected: false
         });
+
+        // Add data attributes for edit controller
+        listItem.dataset.section = 'steps';
+        listItem.dataset.index = actualIdx;
 
         // Add placeholder for new items
         if (isAdding) {
@@ -1657,242 +978,6 @@
       updateView();
     }
 
-    // Render objectives list (top level)
-    function renderObjectivesList(container) {
-      data.objectives.forEach((obj, index) => {
-        // Handle prompt modes (edit, refine, confirm)
-        if (promptMode === 'edit' && promptTargetIndex === index && promptTargetSection === 'objectives') {
-          const div = document.createElement('div');
-          div.innerHTML = createPromptRow(getPromptLabel(), getPromptDefault());
-          container.appendChild(div.firstElementChild);
-          return;
-        }
-
-        if (promptMode === 'refine' && promptTargetIndex === index) {
-          const div = document.createElement('div');
-          div.innerHTML = createPromptRow('Refine description:', obj.description || '');
-          container.appendChild(div.firstElementChild);
-          return;
-        }
-
-        if (promptMode === 'confirm' && promptTargetIndex === index) {
-          const div = document.createElement('div');
-          div.innerHTML = createConfirmRow(`Delete "${obj.name}"?`);
-          container.appendChild(div.firstElementChild);
-          return;
-        }
-
-        // Use modular ListItem component
-        const listItem = createListItem({
-          icon: `${index + 1}.`,
-          iconClass: 'numeric',
-          content: obj.name,
-          meta: getClarityMeta(obj, 'objectives', index),
-          selected: keyboardMode && index === selectedIndex && !promptMode,
-          onClick: (e) => {
-            if (e.target.classList.contains('edit-btn')) return;
-            keyboardMode = false;
-            handleSelect(index);
-          }
-        });
-        container.appendChild(listItem);
-
-        // Trigger async clarity refresh
-        refreshClarity(obj);
-      });
-
-      // Add new objective option
-      if (promptMode === 'add' && promptTargetSection === 'objectives') {
-        const div = document.createElement('div');
-        div.innerHTML = createPromptRow(getPromptLabel(), '');
-        container.appendChild(div.firstElementChild);
-      } else {
-        const addDiv = document.createElement('div');
-        addDiv.className = 'add-option';
-        addDiv.innerHTML = '+ Add new objective';
-        addDiv.onclick = () => startAddObjective();
-        container.appendChild(addDiv);
-      }
-    }
-
-    // Render objective detail (priorities + steps)
-    function renderObjectiveDetail(container) {
-      const obj = currentView.parent;
-      let globalIndex = 0;
-
-      // PRIORITIES section
-      const prioritiesHeader = document.createElement('div');
-      prioritiesHeader.className = 'section-header';
-      prioritiesHeader.textContent = 'PRIORITIES';
-      container.appendChild(prioritiesHeader);
-
-      obj.priorities.forEach((priority, index) => {
-        const currentGlobalIndex = globalIndex;
-
-        // Handle confirm mode
-        if (promptMode === 'confirm' && promptTargetSection === 'priorities' && promptTargetIndex === index) {
-          const div = document.createElement('div');
-          div.innerHTML = createConfirmRow(`Delete "${priority.name}"?`);
-          container.appendChild(div.firstElementChild);
-          globalIndex++;
-          return;
-        }
-
-        // Determine edit/refine state
-        const isEditing = promptMode === 'edit' && promptTargetSection === 'priorities' && promptTargetIndex === index;
-        const isRefining = promptMode === 'refine' && promptTargetSection === 'priorities' && promptTargetIndex === index;
-        const isInEditMode = isEditing || isRefining;
-
-        // Get the text to display (name for edit, description for refine)
-        let textContent = priority.name;
-        if (isRefining) {
-          textContent = priority.description || '';
-        }
-
-        // Use modular ListItem component
-        const listItem = createListItem({
-          icon: isInEditMode ? '>' : '-',
-          iconClass: isInEditMode ? 'editing' : '',
-          content: textContent,
-          contentEditable: isInEditMode,
-          meta: isInEditMode ? '' : getClarityMeta(priority, 'priorities', index),
-          selected: keyboardMode && currentGlobalIndex === selectedIndex && !promptMode,
-          onClick: (e) => {
-            if (e.target.classList.contains('edit-btn')) return;
-            keyboardMode = false;
-            updateList();
-          }
-        });
-        container.appendChild(listItem);
-        globalIndex++;
-
-        // Trigger async clarity refresh
-        refreshClarity(priority);
-      });
-
-      // Add priority option
-      const addPriorityIndex = globalIndex;
-      if (promptMode === 'add' && promptTargetSection === 'priorities') {
-        const div = document.createElement('div');
-        div.innerHTML = createPromptRow('Priority name:', '');
-        container.appendChild(div.firstElementChild);
-      } else if (obj.priorities.length < 3) {
-        const addDiv = document.createElement('div');
-        addDiv.className = 'add-option' + (keyboardMode && addPriorityIndex === selectedIndex && !promptMode ? ' selected' : '');
-        addDiv.innerHTML = '+ Add priority';
-        addDiv.onclick = () => { keyboardMode = false; startAddPriority(); };
-        container.appendChild(addDiv);
-      } else {
-        const addDiv = document.createElement('div');
-        addDiv.className = 'add-option disabled';
-        addDiv.innerHTML = '(max 3 priorities)';
-        container.appendChild(addDiv);
-      }
-      globalIndex++;
-
-      // STEPS section
-      const stepsHeader = document.createElement('div');
-      stepsHeader.className = 'section-header';
-      stepsHeader.textContent = 'STEPS';
-      container.appendChild(stepsHeader);
-
-      // Display steps newest-first (reverse chronological)
-      // We iterate from the end of the array to the beginning
-      for (let displayIdx = 0; displayIdx < obj.steps.length; displayIdx++) {
-        // Map display index to actual array index (reversed)
-        const actualIdx = obj.steps.length - 1 - displayIdx;
-        const step = obj.steps[actualIdx];
-        const currentGlobalIndex = globalIndex;
-
-        // Handle confirm mode
-        if (promptMode === 'confirm' && promptTargetSection === 'steps' && promptTargetIndex === actualIdx) {
-          const div = document.createElement('div');
-          div.innerHTML = createConfirmRow(`Delete "${step.name}"?`);
-          container.appendChild(div.firstElementChild);
-          globalIndex++;
-          continue;
-        }
-
-        const timestamp = formatTimestamp(step.loggedAt);
-        const orderNum = step.orderNumber || (actualIdx + 1); // Fallback for legacy steps
-
-        // Determine if this step is being edited
-        const isEditing = promptMode === 'edit' && promptTargetSection === 'steps' && promptTargetIndex === actualIdx;
-
-        // Use modular ListItem component
-        // For steps, icon is the timestamp; when editing, add > prefix
-        const iconContent = isEditing ? `#${orderNum} ${timestamp} >` : `#${orderNum} ${timestamp}`;
-        const listItem = createListItem({
-          icon: iconContent,
-          iconClass: isEditing ? 'timestamp editing' : 'timestamp',
-          content: step.name,
-          contentEditable: isEditing,
-          meta: '', // Steps don't have clarity badges
-          metaClass: 'compact',
-          selected: keyboardMode && currentGlobalIndex === selectedIndex && !promptMode,
-          onClick: () => {
-            keyboardMode = false;
-            updateList();
-          }
-        });
-        container.appendChild(listItem);
-        globalIndex++;
-      }
-
-      // Add step option (no limit)
-      const addStepIndex = globalIndex;
-      if (promptMode === 'log' && promptTargetSection === 'steps') {
-        const div = document.createElement('div');
-        div.innerHTML = createPromptRow('What did you do?', '');
-        container.appendChild(div.firstElementChild);
-      } else {
-        const addDiv = document.createElement('div');
-        addDiv.className = 'add-option' + (keyboardMode && addStepIndex === selectedIndex && !promptMode ? ' selected' : '');
-        addDiv.innerHTML = '+ Log a step';
-        addDiv.onclick = () => { keyboardMode = false; startLogStep(); };
-        container.appendChild(addDiv);
-      }
-    }
-
-    // Get prompt label
-    function getPromptLabel() {
-      if (promptMode === 'add') {
-        if (promptStep === 0) return `${capitalize(promptData.type)} name:`;
-        if (promptStep === 1) return 'Description (optional):';
-      } else if (promptMode === 'edit') {
-        return 'Name:';
-      }
-      return '';
-    }
-
-    // Get prompt default
-    function getPromptDefault() {
-      if (promptMode === 'edit' && promptData.item) {
-        return promptData.item.name;
-      }
-      return '';
-    }
-
-    // Update status bar
-    function updateStatusBar() {
-      let shortcuts = '';
-      if (promptMode) {
-        shortcuts = '[Enter] Confirm  [Esc] Cancel';
-      } else if (currentView.level === 'objectives') {
-        shortcuts = '[↑↓] Navigate  [Enter] Select  [a] Add  [e] Edit  [r] Refine  [d] Delete  [q] Quit';
-      } else {
-        const sel = getSelectionInfo();
-        if (sel.isAdd) {
-          shortcuts = '[↑↓] Navigate  [Enter] Add  [Esc] Back';
-        } else if (sel.section === 'priorities') {
-          shortcuts = '[↑↓] Navigate  [a] Add  [e] Edit  [r] Refine  [d] Delete  [Esc] Back';
-        } else {
-          shortcuts = '[↑↓] Navigate  [s] Log step  [e] Edit  [d] Delete  [Esc] Back';
-        }
-      }
-      document.getElementById('shortcuts').textContent = shortcuts;
-    }
-
     // Show message toast
     function showMessage(text, duration = 1500) {
       const toast = document.getElementById('message-toast');
@@ -1901,72 +986,10 @@
       setTimeout(() => { toast.style.display = 'none'; }, duration);
     }
 
-    // Handle header click
-    function handleHeaderClick() {
-      if (promptMode) return;
-      handleBack();
-    }
-
-    // Handle item selection (Enter or click)
-    function handleSelect(clickIndex) {
-      // Use clicked index if provided, otherwise use keyboard selectedIndex
-      const idx = clickIndex !== undefined ? clickIndex : selectedIndex;
-
-      if (currentView.level === 'objectives') {
-        if (idx >= 0 && idx < data.objectives.length) {
-          showObjectiveDetail(data.objectives[idx]);
-        }
-      } else {
-        // For clicks in detail view, temporarily set selectedIndex to get correct selection info
-        if (clickIndex !== undefined) selectedIndex = clickIndex;
-        const sel = getSelectionInfo();
-        if (sel.isAdd) {
-          if (sel.section === 'priorities') {
-            startAddPriority();
-          } else {
-            startLogStep();
-          }
-        }
-      }
-      updateList();
-    }
-
-    // Show objectives list (top level)
-    function showObjectives() {
-      currentView = { level: 'objectives', parent: null };
-      navigationStack = [];
-      selectedIndex = 0;
-      refreshView();
-    }
-
-    // Show objective detail
-    function showObjectiveDetail(objective) {
-      navigationStack.push({ ...currentView, selectedIndex });
-      currentView = { level: 'objective-detail', parent: objective };
-      selectedIndex = 0;
-      refreshView();
-    }
-
-    // Handle back navigation
-    function handleBack() {
-      if (navigationStack.length === 0) return;
-      const prev = navigationStack.pop();
-      currentView = prev;
-      selectedIndex = prev.selectedIndex || 0;
-      refreshView();
-    }
-
-    // Refresh current view
-    function refreshView() {
-      updateHeader();
-      updateList();
-      updateStatusBar();
-    }
-
     // Start add objective
     function startAddObjective() {
       // Commit any current edit first
-      commitCurrentEdit();
+      commitEditInPlace();
 
       // Create placeholder objective
       const newObj = {
@@ -1992,7 +1015,7 @@
     // Start add priority (instant inline edit pattern)
     function startAddPriority() {
       // Commit any current edit first
-      commitCurrentEdit();
+      commitEditInPlace();
 
       const obj = data.objectives[selectedObjectiveIndex];
       if (!obj || obj.priorities.length >= 3) return;
@@ -2020,7 +1043,7 @@
     // Start log step (instant inline edit pattern)
     function startLogStep() {
       // Commit any current edit first
-      commitCurrentEdit();
+      commitEditInPlace();
 
       const obj = data.objectives[selectedObjectiveIndex];
       if (!obj) return;
@@ -2046,277 +1069,6 @@
 
       renderContentView();
       focusPromptInput();
-      updateStatusBar();
-    }
-
-    // Commit current edit before switching to a new one
-    // Saves the current value and resets state WITHOUT re-rendering
-    function commitCurrentEdit() {
-      if (!promptMode || (promptMode !== 'edit' && promptMode !== 'add' && promptMode !== 'refine')) {
-        return;
-      }
-
-      const contentEditable = document.querySelector('[contenteditable="true"]');
-      if (contentEditable) {
-        const value = contentEditable.textContent;
-        skipBlurHandler = true; // Prevent stale blur handler from double-processing
-
-        // Save based on current mode
-        if (promptMode === 'edit' && promptData.item) {
-          if (value.trim()) {
-            promptData.item.name = value.trim();
-            saveData();
-          }
-        } else if (promptMode === 'add' && promptData.item) {
-          if (value.trim()) {
-            promptData.item.name = value.trim();
-            saveData();
-          } else {
-            // Remove empty placeholder
-            const obj = data.objectives[selectedObjectiveIndex];
-            if (promptTargetSection === 'objectives') {
-              if (data.objectives[promptTargetIndex] && !data.objectives[promptTargetIndex].name.trim()) {
-                data.objectives.splice(promptTargetIndex, 1);
-                selectedObjectiveIndex = Math.max(0, data.objectives.length - 1);
-              }
-            } else if (promptTargetSection === 'priorities' && obj) {
-              obj.priorities.splice(promptTargetIndex, 1);
-            } else if (promptTargetSection === 'steps' && obj) {
-              obj.steps.splice(promptTargetIndex, 1);
-            }
-          }
-        } else if (promptMode === 'refine' && promptData.item) {
-          promptData.item.description = value.trim();
-          saveData();
-        }
-      }
-
-      // Reset prompt state WITHOUT rendering (caller will render)
-      promptMode = null;
-      promptStep = 0;
-      promptData = {};
-      promptTargetIndex = -1;
-      promptTargetSection = null;
-    }
-
-    // Start inline edit IN PLACE - no re-render, immediate editability
-    function startInlineEditInPlace(section, index, listItemEl, contentSpan) {
-      // If already editing this exact item, do nothing (preserve cursor)
-      if (promptMode === 'edit' && promptTargetSection === section && promptTargetIndex === index) {
-        return;
-      }
-
-      // If in add mode, commit first (this needs re-render, so fall back)
-      if (promptMode === 'add' || promptMode === 'refine') {
-        commitCurrentEdit();
-        // Fall through to set up new edit below
-      }
-      // If in edit mode, save current and restore that element visually
-      else if (promptMode === 'edit') {
-        const currentEditable = document.querySelector('[contenteditable="true"]');
-        if (currentEditable && currentEditable !== contentSpan) {
-          const value = currentEditable.textContent;
-          skipBlurHandler = true;
-
-          if (promptData.item && value.trim()) {
-            promptData.item.name = value.trim();
-            saveData();
-          }
-          // Restore element to non-editable state
-          currentEditable.removeAttribute('contenteditable');
-          if (promptData.item) {
-            currentEditable.textContent = promptData.item.name;
-          }
-          const parentItem = currentEditable.closest('.list-item');
-          if (parentItem) {
-            const iconSpan = parentItem.querySelector('.list-item-icon');
-            if (iconSpan) {
-              iconSpan.textContent = '-';
-              iconSpan.classList.remove('editing');
-            }
-            // Restore meta
-            const metaSpan = parentItem.querySelector('.list-item-meta');
-            if (metaSpan) {
-              metaSpan.style.display = '';
-            }
-          }
-        }
-        // Reset state
-        promptMode = null;
-        promptStep = 0;
-        promptData = {};
-        promptTargetIndex = -1;
-        promptTargetSection = null;
-      }
-
-      const obj = data.objectives[selectedObjectiveIndex];
-      if (!obj) return;
-
-      let item;
-      if (section === 'priorities') {
-        item = obj.priorities[index];
-      } else if (section === 'steps') {
-        item = obj.steps[index];
-      }
-      if (!item) return;
-
-      // Set up prompt state
-      promptMode = 'edit';
-      promptStep = 0;
-      promptTargetIndex = index;
-      promptTargetSection = section;
-      promptData = { type: section === 'priorities' ? 'priority' : 'step', item: item };
-
-      // Make element editable IN PLACE (no re-render!)
-      contentSpan.setAttribute('contenteditable', 'true');
-
-      // Update icon to show editing state
-      const iconSpan = listItemEl.querySelector('.list-item-icon');
-      if (iconSpan) {
-        iconSpan.textContent = '>';
-        iconSpan.classList.add('editing');
-      }
-
-      // Hide meta (clarity badge) while editing
-      const metaSpan = listItemEl.querySelector('.list-item-meta');
-      if (metaSpan) {
-        metaSpan.style.display = 'none';
-      }
-
-      // Focus and place cursor at end
-      contentSpan.focus();
-      const range = document.createRange();
-      const sel = window.getSelection();
-      range.selectNodeContents(contentSpan);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-
-      // Set up blur handler
-      contentSpan.addEventListener('blur', () => {
-        if (skipBlurHandler) {
-          skipBlurHandler = false;
-          return;
-        }
-        if (promptMode) {
-          processPromptInput(contentSpan.textContent);
-        }
-      }, { once: true });
-
-      updateStatusBar();
-    }
-
-    // Start inline edit (for keyboard shortcuts - still uses re-render)
-    function startInlineEdit(section, index) {
-      // If already editing this exact item, do nothing (preserve cursor)
-      if (promptMode === 'edit' && promptTargetSection === section && promptTargetIndex === index) {
-        return;
-      }
-
-      // First, commit any current edit
-      commitCurrentEdit();
-
-      const obj = data.objectives[selectedObjectiveIndex];
-      if (!obj) return;
-
-      if (section === 'priorities') {
-        if (!obj.priorities[index]) return;
-        promptMode = 'edit';
-        promptStep = 0;
-        promptTargetIndex = index;
-        promptTargetSection = 'priorities';
-        promptData = { type: 'priority', item: obj.priorities[index] };
-      } else if (section === 'steps') {
-        if (!obj.steps[index]) return;
-        promptMode = 'edit';
-        promptStep = 0;
-        promptTargetIndex = index;
-        promptTargetSection = 'steps';
-        promptData = { type: 'step', item: obj.steps[index] };
-      }
-
-      renderContentView();
-      focusPromptInput();
-      updateStatusBar();
-    }
-
-    // Start edit
-    function startEdit() {
-      if (currentView.level === 'objectives') {
-        if (selectedIndex >= data.objectives.length) return;
-        promptMode = 'edit';
-        promptStep = 0;
-        promptTargetIndex = selectedIndex;
-        promptTargetSection = 'objectives';
-        promptData = { type: 'objective', item: data.objectives[selectedIndex] };
-      } else {
-        const sel = getSelectionInfo();
-        if (sel.isAdd) return;
-        const obj = currentView.parent;
-        if (sel.section === 'priorities') {
-          promptMode = 'edit';
-          promptStep = 0;
-          promptTargetIndex = sel.index;
-          promptTargetSection = 'priorities';
-          promptData = { type: 'priority', item: obj.priorities[sel.index] };
-        } else {
-          promptMode = 'edit';
-          promptStep = 0;
-          promptTargetIndex = sel.index;
-          promptTargetSection = 'steps';
-          promptData = { type: 'step', item: obj.steps[sel.index] };
-        }
-      }
-      updateList();
-      updateStatusBar();
-    }
-
-    // Start refine
-    function startRefine() {
-      if (currentView.level === 'objectives') {
-        if (selectedIndex >= data.objectives.length) return;
-        promptMode = 'refine';
-        promptTargetIndex = selectedIndex;
-        promptTargetSection = 'objectives';
-        promptData = { item: data.objectives[selectedIndex] };
-      } else {
-        const sel = getSelectionInfo();
-        if (sel.isAdd || sel.section === 'steps') return;
-        const obj = currentView.parent;
-        promptMode = 'refine';
-        promptTargetIndex = sel.index;
-        promptTargetSection = 'priorities';
-        promptData = { item: obj.priorities[sel.index] };
-      }
-      updateList();
-      updateStatusBar();
-    }
-
-    // Start delete
-    function startDelete() {
-      if (currentView.level === 'objectives') {
-        if (selectedIndex >= data.objectives.length) return;
-        promptMode = 'confirm';
-        promptTargetIndex = selectedIndex;
-        promptTargetSection = 'objectives';
-        promptData = { action: 'delete', item: data.objectives[selectedIndex] };
-      } else {
-        const sel = getSelectionInfo();
-        if (sel.isAdd) return;
-        const obj = currentView.parent;
-        if (sel.section === 'priorities') {
-          promptMode = 'confirm';
-          promptTargetIndex = sel.index;
-          promptTargetSection = 'priorities';
-          promptData = { action: 'delete', item: obj.priorities[sel.index] };
-        } else {
-          promptMode = 'confirm';
-          promptTargetIndex = sel.index;
-          promptTargetSection = 'steps';
-          promptData = { action: 'delete', item: obj.steps[sel.index] };
-        }
-      }
-      updateList();
       updateStatusBar();
     }
 
@@ -2533,6 +1285,249 @@
         }
       }
     }, { passive: false });
+
+    // ========================================
+    // UNIFIED EDIT CONTROLLER
+    // Single mousedown handler as the decision point
+    // ========================================
+
+    /**
+     * Commit current edit in-place without re-rendering
+     * Returns: { needsRerender: boolean, removedElement: boolean }
+     */
+    function commitEditInPlace() {
+      if (!promptMode || (promptMode !== 'edit' && promptMode !== 'add' && promptMode !== 'refine')) {
+        return { needsRerender: false, removedElement: false };
+      }
+
+      const contentEditable = document.querySelector('[contenteditable="true"]');
+      if (!contentEditable) {
+        resetPromptState();
+        return { needsRerender: false, removedElement: false };
+      }
+
+      const value = contentEditable.textContent.trim();
+      const listItem = contentEditable.closest('.list-item') || contentEditable.closest('.side-item');
+      let needsRerender = false;
+      let removedElement = false;
+
+      skipBlurHandler = true; // Prevent blur from double-processing
+
+      if (promptMode === 'add' && promptData.item) {
+        if (!value) {
+          // Remove empty placeholder - needs re-render
+          if (promptTargetSection === 'objectives') {
+            data.objectives.splice(promptTargetIndex, 1);
+            selectedObjectiveIndex = Math.max(0, data.objectives.length - 1);
+          } else if (promptTargetSection === 'priorities') {
+            const obj = data.objectives[selectedObjectiveIndex];
+            if (obj) obj.priorities.splice(promptTargetIndex, 1);
+          } else if (promptTargetSection === 'steps') {
+            const obj = data.objectives[selectedObjectiveIndex];
+            if (obj) obj.steps.splice(promptTargetIndex, 1);
+          }
+          needsRerender = true;
+          removedElement = true;
+        } else {
+          // Save and restore in place
+          promptData.item.name = value;
+          saveData();
+          restoreElementInPlace(contentEditable, listItem, value);
+        }
+      } else if (promptMode === 'edit' && promptData.item) {
+        if (value) {
+          promptData.item.name = value;
+          saveData();
+        }
+        restoreElementInPlace(contentEditable, listItem, promptData.item.name);
+      } else if (promptMode === 'refine' && promptData.item) {
+        promptData.item.description = value;
+        saveData();
+        restoreElementInPlace(contentEditable, listItem, promptData.item.name);
+      }
+
+      resetPromptState();
+      return { needsRerender, removedElement };
+    }
+
+    /**
+     * Restore a list item element to non-editable state
+     */
+    function restoreElementInPlace(contentEditable, listItem, text) {
+      contentEditable.removeAttribute('contenteditable');
+      contentEditable.textContent = text;
+
+      if (listItem) {
+        const iconSpan = listItem.querySelector('.list-item-icon');
+        if (iconSpan) {
+          iconSpan.textContent = '-';
+          iconSpan.classList.remove('editing');
+        }
+      }
+    }
+
+    /**
+     * Reset prompt state variables
+     */
+    function resetPromptState() {
+      promptMode = null;
+      promptStep = 0;
+      promptData = {};
+      promptTargetIndex = -1;
+      promptTargetSection = null;
+    }
+
+    /**
+     * Start editing a list item in-place (no re-render)
+     */
+    function startEditInPlace(section, index, listItemEl) {
+      const obj = data.objectives[selectedObjectiveIndex];
+      if (!obj) return;
+
+      let item;
+      if (section === 'priorities') {
+        item = obj.priorities[index];
+      } else if (section === 'steps') {
+        item = obj.steps[index];
+      }
+      if (!item) return;
+
+      const contentSpan = listItemEl.querySelector('.list-item-content');
+      if (!contentSpan) return;
+
+      // Set up prompt state
+      promptMode = 'edit';
+      promptStep = 0;
+      promptTargetIndex = index;
+      promptTargetSection = section;
+      promptData = { type: section === 'priorities' ? 'priority' : 'step', item };
+
+      // Make element editable
+      contentSpan.setAttribute('contenteditable', 'true');
+
+      // Update icon
+      const iconSpan = listItemEl.querySelector('.list-item-icon');
+      if (iconSpan) {
+        iconSpan.textContent = '>';
+        iconSpan.classList.add('editing');
+      }
+
+      // Focus and place cursor at end
+      contentSpan.focus();
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(contentSpan);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      // Blur handler as fallback for edge cases (tabbing away, etc.)
+      contentSpan.addEventListener('blur', () => {
+        if (skipBlurHandler) {
+          skipBlurHandler = false;
+          return;
+        }
+        if (promptMode) {
+          processPromptInput(contentSpan.textContent);
+        }
+      }, { once: true });
+
+      updateStatusBar();
+    }
+
+    /**
+     * Main mousedown handler - single decision point for all edit interactions
+     */
+    document.addEventListener('mousedown', (e) => {
+      // Skip confirm mode - has its own keyboard handling
+      if (promptMode === 'confirm') return;
+
+      const currentEditable = document.querySelector('[contenteditable="true"]');
+      const clickedListItem = e.target.closest('.list-item[data-section]');
+      const clickedSideItem = e.target.closest('.side-item:not(.add-option)');
+      const clickedAddOption = e.target.closest('.add-option');
+
+      // CASE 1: Not currently editing - just let clicks proceed normally
+      if (!currentEditable || !promptMode) {
+        // If clicking a list item, start editing it
+        if (clickedListItem) {
+          e.preventDefault();
+          const section = clickedListItem.dataset.section;
+          const index = parseInt(clickedListItem.dataset.index, 10);
+          if (section && !isNaN(index)) {
+            startEditInPlace(section, index, clickedListItem);
+          }
+        }
+        // Side items and add options have their own handlers
+        return;
+      }
+
+      // CASE 2: Currently editing - determine what to do
+      const currentItem = currentEditable.closest('.list-item') || currentEditable.closest('.side-item');
+
+      // Clicking on the same item being edited - do nothing, let editing continue
+      if (currentItem && currentItem.contains(e.target)) {
+        return;
+      }
+
+      // CASE 3: Clicking on a different list item - transition edit
+      if (clickedListItem) {
+        e.preventDefault();
+        const section = clickedListItem.dataset.section;
+        const index = parseInt(clickedListItem.dataset.index, 10);
+
+        // Commit current edit in place
+        const { needsRerender, removedElement } = commitEditInPlace();
+
+        if (needsRerender) {
+          // Element was removed, need to re-render then start edit
+          // Adjust index if we removed an item before the target
+          let adjustedIndex = index;
+          if (removedElement && promptTargetSection === section && promptTargetIndex < index) {
+            adjustedIndex = index - 1;
+          }
+          updateView();
+          // Find the new element and start editing
+          setTimeout(() => {
+            const newListItem = document.querySelector(`.list-item[data-section="${section}"][data-index="${adjustedIndex}"]`);
+            if (newListItem) {
+              startEditInPlace(section, adjustedIndex, newListItem);
+            }
+          }, 0);
+        } else {
+          // No re-render needed - start editing directly
+          startEditInPlace(section, index, clickedListItem);
+        }
+        return;
+      }
+
+      // CASE 4: Clicking on add option - commit and let add handler run
+      if (clickedAddOption) {
+        const { needsRerender } = commitEditInPlace();
+        if (needsRerender) {
+          updateView();
+        }
+        // Let the click event proceed to the add option's onclick
+        return;
+      }
+
+      // CASE 5: Clicking on side item - commit and let selection happen
+      if (clickedSideItem) {
+        const { needsRerender } = commitEditInPlace();
+        if (needsRerender) {
+          updateView();
+        }
+        // Let the click event proceed to select the objective
+        return;
+      }
+
+      // CASE 6: Clicking elsewhere (empty space) - just commit and close
+      const { needsRerender } = commitEditInPlace();
+      if (needsRerender) {
+        updateView();
+      }
+      updateStatusBar();
+    });
 
     // Keyboard handling (simplified for split-pane)
     document.addEventListener('keydown', (e) => {
