@@ -27,6 +27,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  align-self: stretch;
   height: 32px;
   background: #0a0a0a;
   -webkit-app-region: drag;
@@ -185,41 +186,54 @@ body.browser-mode #intro {
 }
 
 /* ========================================
-   Main App - Split Pane Layout
+   Main App - Split Pane Layout (CSS Grid)
    ======================================== */
 #app {
   display: none;
-  flex-direction: row;
+  grid-template-columns: 1fr 2fr;
   width: 90%;
   max-width: 1200px;
-  height: 500px;
+  height: calc(100vh - 40px - 30vh);
+  margin: 30vh auto 0 auto;
   padding-bottom: 40px;
+  overflow: hidden;
 }
 
 /* ========================================
    Side List (left pane - 1/3 width)
    ======================================== */
 #side-list {
-  width: 33.333%;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
   overflow: hidden;
+  min-width: 0;
 }
 
 #side-list-items {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 12px 0;
+  padding: 10px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#side-list-items::-webkit-scrollbar {
+  display: none;
 }
 
 .side-item {
   display: flex;
   align-items: center;
   padding: 2px 8px;
-  cursor: text;
+  cursor: pointer;
   color: #888;
   transition: color 0.15s;
   position: relative;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .side-item:hover {
@@ -228,7 +242,6 @@ body.browser-mode #intro {
 
 .side-item.selected {
   color: #fff;
-  font-weight: bold;
 }
 
 .side-item.editing {
@@ -243,6 +256,8 @@ body.browser-mode #intro {
 }
 
 .side-item-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -284,33 +299,49 @@ body.browser-mode #intro {
    Content View (right pane - 2/3 width)
    ======================================== */
 #content-view {
-  width: 66.666%;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
   overflow: hidden;
+  min-width: 0;
 }
 
 #content-header {
   padding: 12px 20px;
   flex-shrink: 0;
+  height: 60px;
+  overflow: hidden;
 }
 
 #content-header-title {
   font-weight: bold;
   color: #fff;
   font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #content-header-description {
   color: #666;
   margin-top: 4px;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #content-body {
   flex: 1;
   overflow-y: auto;
   padding: 0 20px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#content-body::-webkit-scrollbar {
+  display: none;
 }
 
 /* ========================================
@@ -561,7 +592,7 @@ body.browser-mode #intro {
 }
 
 .side-item.files-header:hover {
-  color: #888;
+  color: #e0e0e0;
   background: transparent;
 }
 
@@ -571,6 +602,15 @@ body.browser-mode #intro {
   font-family: monospace;
   width: 10px;
   display: inline-block;
+}
+
+.folder-icon {
+  width: 16px;
+  margin-right: 4px;
+  font-size: 12px;
+  display: inline-block;
+  flex-shrink: 0;
+  text-align: center;
 }
 
 .folder-path {
@@ -590,6 +630,10 @@ body.browser-mode #intro {
   color: #888;
 }
 
+.side-item.folder-item:hover {
+  color: #e0e0e0;
+}
+
 .side-item.folder-item.selected {
   color: #fff;
 }
@@ -603,13 +647,18 @@ body.browser-mode #intro {
   color: #666;
 }
 
+.side-item.file-item:hover {
+  color: #e0e0e0;
+}
+
 .side-item.file-item.selected {
   color: #fff;
 }
 
 .file-icon {
-  width: 14px;
+  width: 16px;
   margin-right: 4px;
   color: #444;
   display: inline-block;
+  flex-shrink: 0;
 }

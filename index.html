@@ -30,7 +30,7 @@
 
     <!-- Main App - Split Pane -->
     <div id="app">
-      <!-- Side List (1/3) - Unified scrollable area -->
+      <!-- Side List (1/3) -->
       <div id="side-list">
         <div id="side-list-items"></div>
       </div>
@@ -663,7 +663,7 @@
         document.removeEventListener('click', skip);
         document.removeEventListener('keydown', handleKey);
         introEl.style.display = 'none';
-        appEl.style.display = 'flex';
+        appEl.style.display = 'grid';
       };
 
       const handleKey = (e) => {
@@ -692,7 +692,7 @@
       document.removeEventListener('click', skip);
       document.removeEventListener('keydown', handleKey);
       introEl.style.display = 'none';
-      appEl.style.display = 'flex';
+      appEl.style.display = 'grid';
     }
 
     function typeText(element, text, speed, cursorEl = null, isSkipped = () => false) {
@@ -737,11 +737,11 @@
     // Render the unified side list (objectives + folder explorer)
     async function renderSideList() {
       const container = document.getElementById('side-list-items');
-      container.innerHTML = '';
 
       const SideListState = window.Objectiv?.SideListState;
       if (!SideListState) {
         // Module not ready, fall back to basic render
+        container.innerHTML = '';
         renderSideListBasic(container);
         return;
       }
@@ -757,17 +757,22 @@
       const items = SideListState.getItems();
       const selectedIdx = SideListState.getSelectedIndex();
 
-      // Render each item from the unified list
+      // Build all items in a fragment first (no DOM until complete)
+      const fragment = document.createDocumentFragment();
       items.forEach((itemData, idx) => {
         const isSelected = idx === selectedIdx;
         const element = createSideListItem(itemData, idx, isSelected);
-        container.appendChild(element);
+        fragment.appendChild(element);
       });
+
+      // Swap content in one operation (prevents empty state flicker)
+      container.innerHTML = '';
+      container.appendChild(fragment);
 
       // Scroll selected into view
       const selectedEl = container.querySelector('.side-item.selected');
       if (selectedEl) {
-        selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        selectedEl.scrollIntoView({ block: 'nearest' });
       }
     }
 
@@ -834,7 +839,7 @@
           item.dataset.path = itemData.path;
           item.style.paddingLeft = `${8 + itemData.depth * 12}px`;
           item.innerHTML = `
-            <span class="folder-toggle">${itemData.isExpanded ? 'v' : '>'}</span>
+            <span class="folder-icon">${itemData.isExpanded ? '📂' : '📁'}</span>
             <span class="side-item-name">${itemData.name}</span>
             ${indicator}
           `;
@@ -920,7 +925,7 @@
         const idx = parseInt(item.dataset.idx, 10);
         if (idx === selectedIdx) {
           item.classList.add('selected');
-          item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          item.scrollIntoView({ block: 'nearest' });
         } else {
           item.classList.remove('selected');
         }
