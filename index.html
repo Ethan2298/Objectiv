@@ -20,7 +20,7 @@
 <body>
   <!-- Titlebar -->
   <div id="titlebar">
-    <div id="titlebar-title">Objectiv.go</div>
+    <div id="titlebar-title"></div>
     <div id="window-controls">
       <button class="window-btn" id="btn-minimize">&#xE921;</button>
       <button class="window-btn" id="btn-maximize">&#xE922;</button>
@@ -42,6 +42,7 @@
     <div id="app">
       <!-- Side List (1/3) -->
       <div id="side-list">
+        <div id="resize-handle"></div>
         <div id="side-list-indicator">●</div>
         <div id="side-list-items"></div>
       </div>
@@ -188,6 +189,45 @@
       document.getElementById('btn-maximize').addEventListener('click', () => window.electronAPI.maximize());
       document.getElementById('btn-close').addEventListener('click', () => window.electronAPI.close());
     }
+
+    // Sidebar resize handle
+    (function() {
+      const handle = document.getElementById('resize-handle');
+      const app = document.getElementById('app');
+      let isResizing = false;
+
+      // Load saved width
+      const savedWidth = localStorage.getItem('objectiv-sidebar-width');
+      if (savedWidth) {
+        app.style.setProperty('--sidebar-width', savedWidth + 'px');
+      }
+
+      handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const newWidth = Math.min(500, Math.max(150, e.clientX));
+        app.style.setProperty('--sidebar-width', newWidth + 'px');
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          handle.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          // Save width
+          const width = getComputedStyle(app).getPropertyValue('--sidebar-width');
+          localStorage.setItem('objectiv-sidebar-width', parseInt(width));
+        }
+      });
+    })();
   </script>
 
   <script>
@@ -224,6 +264,10 @@
 
     // View mode: 'objective' or 'file'
     let viewMode = 'objective';
+
+    // Hover preview state
+    let hoverPreviewActive = false;
+    let hoverPreviewItemData = null;
 
     // Prompt state
     let promptMode = null; // null, 'add', 'edit', 'refine', 'log', 'confirm'
@@ -877,6 +921,10 @@
       const SideListState = window.Objectiv?.SideListState;
       const ItemType = SideListState?.ItemType || {};
 
+      // Clear hover preview on click (we're now selecting)
+      hoverPreviewActive = false;
+      hoverPreviewItemData = null;
+
       // Update selection
       SideListState.setSelectedIndex(idx);
       playNotch();
@@ -959,19 +1007,13 @@
       if (!SideListState) return;
 
       const selectedIdx = SideListState.getSelectedIndex();
-      const container = document.getElementById('side-list-items');
       const items = document.querySelectorAll('#side-list-items .side-item[data-idx]');
 
       items.forEach((item) => {
         const idx = parseInt(item.dataset.idx, 10);
         if (idx === selectedIdx) {
           item.classList.add('selected');
-          // First item: scroll to top to show 30vh air
-          if (idx === 0 && container) {
-            container.scrollTop = 0;
-          } else {
-            item.scrollIntoView({ block: 'nearest' });
-          }
+          item.scrollIntoView({ block: 'nearest' });
         } else {
           item.classList.remove('selected');
         }
@@ -1136,6 +1178,68 @@
         return;
       }
       renderObjectiveView();
+    }
+
+    // Preview content on hover (shows content without changing selection)
+    async function startHoverPreview(itemData) {
+      const SideListState = window.Objectiv?.SideListState;
+      const ItemType = SideListState?.ItemType || {};
+
+      // Only preview objectives and files
+      if (itemData.type !== ItemType.OBJECTIVE && itemData.type !== ItemType.FILE) {
+        return;
+      }
+
+      hoverPreviewActive = true;
+      hoverPreviewItemData = itemData;
+
+      if (itemData.type === ItemType.OBJECTIVE) {
+        // Preview objective content
+        const obj = data.objectives[itemData.index];
+        if (!obj) return;
+
+        const headerTitle = document.getElementById('content-header-title');
+        const headerDesc = document.getElementById('content-header-description');
+        const body = document.getElementById('content-body');
+
+        headerTitle.textContent = obj.name;
+        headerDesc.textContent = obj.description || '';
+
+        body.innerHTML = '';
+        renderContentPriorities(body, obj);
+        renderContentNextStep(body, obj);
+        renderContentSteps(body, obj);
+      } else if (itemData.type === ItemType.FILE) {
+        // Preview file content
+        const FolderExplorer = window.Objectiv?.FolderExplorer;
+        if (!FolderExplorer?.readFile) return;
+
+        const result = await FolderExplorer.readFile(itemData.path);
+        if (!result.success || !hoverPreviewActive) return;
+
+        // Store temporarily for renderFileView
+        const savedPath = selectedFilePath;
+        const savedContent = selectedFileContent;
+
+        selectedFilePath = itemData.path;
+        selectedFileContent = result.content;
+        renderFileView();
+
+        // Restore (these will be used when hover ends)
+        selectedFilePath = savedPath;
+        selectedFileContent = savedContent;
+      }
+    }
+
+    // End hover preview (restore selected content)
+    function endHoverPreview() {
+      if (!hoverPreviewActive) return;
+
+      hoverPreviewActive = false;
+      hoverPreviewItemData = null;
+
+      // Re-render the actually selected content
+      renderContentView();
     }
 
     // Render file content as markdown
@@ -1953,12 +2057,11 @@
     }
 
     // ========================================
-    // SCROLL-SNAP DIAL NAVIGATION
+    // SCROLL-BASED SELECTION
     // Items scroll naturally with snap, selection follows scroll position
     // ========================================
 
     // Detect which item is at the snap line and update selection
-    // Uses 25% threshold - selection changes when scrolled 25% into next item
     function updateSelectionFromScroll() {
       const container = document.getElementById('side-list-items');
       if (!container) return;
@@ -2003,7 +2106,7 @@
           item.classList.toggle('selected', idx === selectedIndex);
         });
 
-        // Update content view for the new selection
+        // Update content view based on selected item
         const selectedItem = SideListState.getSelectedItem();
         if (selectedItem) {
           if (selectedItem.type === SideListState.ItemType.OBJECTIVE) {

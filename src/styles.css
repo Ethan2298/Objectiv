@@ -53,7 +53,7 @@ body {
   align-items: center;
   align-self: stretch;
   height: 32px;
-  background: var(--bg-subtle);
+  background: transparent;
   -webkit-app-region: drag;
   flex-shrink: 0;
 }
@@ -214,7 +214,7 @@ body.browser-mode #intro {
    ======================================== */
 #app {
   display: none;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: var(--sidebar-width, 280px) 1fr;
   width: 100%;
   height: calc(100vh - 40px);
   padding-bottom: 40px;
@@ -231,9 +231,26 @@ body.browser-mode #intro {
   justify-content: flex-start;
   height: 100%;
   overflow: hidden;
-  min-width: 0;
+  min-width: 150px;
+  max-width: 500px;
   border-right: 1px solid var(--border);
-  padding: 0 12px;
+  padding: 0 0 0 12px;
+}
+
+#resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+#resize-handle:hover,
+#resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
 }
 
 #side-list-indicator {
@@ -260,13 +277,13 @@ body.browser-mode #intro {
   align-items: center;
   padding: 2px 8px;
   cursor: pointer;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   color: var(--text-muted);
   transition: color 0.15s;
   position: relative;
   min-width: 0;
   overflow: hidden;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
 }
 
 .side-item:hover {
@@ -274,7 +291,6 @@ body.browser-mode #intro {
 }
 
 .side-item.selected {
-  color: var(--text);
   font-weight: 500;
 }
 
@@ -327,7 +343,6 @@ body.browser-mode #intro {
 .side-item.select-vault {
   color: #0891b2;
   padding: 12px 8px;
-  margin-top: 20vh;
   font-weight: 500;
 }
 
@@ -359,13 +374,13 @@ body.browser-mode #intro {
   -ms-overflow-style: none;
 }
 
+#content-view::-webkit-scrollbar {
+  display: none;
+}
+
 #content-view > * {
   max-width: 720px;
   width: 100%;
-}
-
-#content-view::-webkit-scrollbar {
-  display: none;
 }
 
 #content-header {
@@ -411,7 +426,7 @@ body.browser-mode #intro {
 
 #content-body {
   flex-shrink: 0;
-  padding: 0 40px 30vh 40px;
+  padding: 0 40px 40px 40px;
 }
 
 /* ========================================
@@ -755,7 +770,6 @@ body.browser-mode #intro {
   padding: 8px 12px;
   color: var(--text-muted);
   background: var(--bg);
-  border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -872,10 +886,6 @@ svg.folder-icon {
   background: var(--bg-hover);
 }
 
-.side-item.folder-item.selected {
-  color: #fff;
-}
-
 .side-item.folder-item .folder-toggle {
   font-size: 11px;
 }
@@ -888,10 +898,6 @@ svg.folder-icon {
 
 .side-item.file-item:hover {
   background: var(--bg-hover);
-}
-
-.side-item.file-item.selected {
-  color: #fff;
 }
 
 .file-icon {
