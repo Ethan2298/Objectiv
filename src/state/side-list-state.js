@@ -29,6 +29,7 @@ const state = {
 // ========================================
 
 export const ItemType = {
+  SELECT_VAULT: 'select-vault',  // Initial state - no vault selected
   OBJECTIVE: 'objective',
   ADD_OBJECTIVE: 'add-objective',
   FILES_HEADER: 'files-header',
@@ -167,6 +168,20 @@ export function toggleFolderSection() {
 export async function rebuildItems({ objectives = [], getFolderContents, isAddingObjective = false }) {
   const items = [];
 
+  // NO VAULT SELECTED STATE
+  // If no root path is set, show only the vault selector
+  if (!state.folderExplorer.rootPath) {
+    items.push({
+      type: ItemType.SELECT_VAULT,
+      name: 'Select your folder'
+    });
+
+    state.items = items;
+    state.selectedIndex = 0;
+    return items;
+  }
+
+  // VAULT SELECTED STATE
   // Add objectives
   objectives.forEach((obj, index) => {
     items.push({
@@ -185,7 +200,7 @@ export async function rebuildItems({ objectives = [], getFolderContents, isAddin
     });
   }
 
-  // Add FILES section header (always present, not navigable but marks section)
+  // Add FILES section header
   items.push({
     type: ItemType.FILES_HEADER,
     name: 'FILES',
@@ -193,16 +208,10 @@ export async function rebuildItems({ objectives = [], getFolderContents, isAddin
     rootPath: state.folderExplorer.rootPath
   });
 
-  // Add folder explorer items if root is set and not collapsed
-  if (state.folderExplorer.rootPath && !state.folderExplorer.collapsed) {
+  // Add folder explorer items if not collapsed
+  if (!state.folderExplorer.collapsed) {
     // Add folder tree items recursively
     await addFolderItems(items, state.folderExplorer.rootPath, 0, getFolderContents);
-  } else if (!state.folderExplorer.rootPath && !state.folderExplorer.collapsed) {
-    // No root set, add "Set folder" option
-    items.push({
-      type: ItemType.SET_FOLDER,
-      name: '+ Set folder'
-    });
   }
 
   state.items = items;

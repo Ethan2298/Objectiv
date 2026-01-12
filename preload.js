@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getHome: () => ipcRenderer.invoke('folder-explorer:get-home'),
     exists: (filePath) => ipcRenderer.invoke('folder-explorer:exists', filePath),
     getInfo: (filePath) => ipcRenderer.invoke('folder-explorer:get-info', filePath),
-    readFile: (filePath) => ipcRenderer.invoke('folder-explorer:read-file', filePath)
+    readFile: (filePath) => ipcRenderer.invoke('folder-explorer:read-file', filePath),
+    writeFile: (filePath, content) => ipcRenderer.invoke('folder-explorer:write-file', filePath, content),
+    deleteFile: (filePath) => ipcRenderer.invoke('folder-explorer:delete-file', filePath),
+    renameFile: (oldPath, newPath) => ipcRenderer.invoke('folder-explorer:rename-file', oldPath, newPath),
+    mkdir: (dirPath) => ipcRenderer.invoke('folder-explorer:mkdir', dirPath)
   }
 });

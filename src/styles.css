@@ -2,6 +2,30 @@
    Objectiv.go - Main Stylesheet
    ======================================== */
 
+:root {
+  --bg: #000;
+  --bg-subtle: #0a0a0a;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --text: #e0e0e0;
+  --text-muted: #888;
+  --text-dim: #666;
+  --text-faint: #555;
+  --border: #333;
+  --accent: #0891b2;
+}
+
+body.light-mode {
+  --bg: #f8f8f8;
+  --bg-subtle: #fff;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --text: #1a1a1a;
+  --text-muted: #555;
+  --text-dim: #777;
+  --text-faint: #999;
+  --border: #ddd;
+  --accent: #0891b2;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -9,8 +33,8 @@
 }
 
 body {
-  background: #000;
-  color: #e0e0e0;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   height: 100vh;
   overflow: hidden;
@@ -29,7 +53,7 @@ body {
   align-items: center;
   align-self: stretch;
   height: 32px;
-  background: #0a0a0a;
+  background: var(--bg-subtle);
   -webkit-app-region: drag;
   flex-shrink: 0;
 }
@@ -158,7 +182,7 @@ body.browser-mode #intro {
   left: 0;
   width: 100%;
   height: calc(100% - 32px);
-  background: #000;
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -167,14 +191,14 @@ body.browser-mode #intro {
 
 #intro-text {
   font-size: 0.8rem;
-  color: #e0e0e0;
+  color: var(--text);
 }
 
 #intro-cursor {
   display: inline-block;
   width: 0.6em;
   height: 1em;
-  background: #e0e0e0;
+  background: var(--text);
   margin-left: 2px;
   animation: blink 0.7s infinite;
   vertical-align: text-bottom;
@@ -236,7 +260,7 @@ body.browser-mode #intro {
   align-items: center;
   padding: 2px 8px;
   cursor: pointer;
-  color: #888;
+  color: var(--text-muted);
   transition: color 0.15s;
   position: relative;
   min-width: 0;
@@ -246,11 +270,12 @@ body.browser-mode #intro {
 }
 
 .side-item:hover {
-  color: #e0e0e0;
+  color: var(--text);
 }
 
 .side-item.selected {
-  color: #fff;
+  color: var(--text);
+  font-weight: 500;
 }
 
 .side-item.editing {
@@ -298,6 +323,25 @@ body.browser-mode #intro {
   display: block;
 }
 
+/* Select Vault button - initial state when no vault is selected */
+.side-item.select-vault {
+  color: #0891b2;
+  padding: 12px 8px;
+  margin-top: 20vh;
+  font-weight: 500;
+}
+
+.side-item.select-vault:hover {
+  color: #06b6d4;
+}
+
+.side-item.select-vault .folder-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  stroke: currentColor;
+}
+
 /* ========================================
    Content View (right pane - 2/3 width)
    ======================================== */
@@ -326,15 +370,33 @@ body.browser-mode #intro {
 
 #content-header-title {
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   font-size: 1.8em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: text;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: background-color 0.15s ease;
+}
+
+#content-header-title:hover {
+  background: var(--bg-hover);
+}
+
+#content-header-title[contenteditable="true"] {
+  outline: none;
+  background: var(--bg-hover);
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: clip;
+  caret-color: #0891b2;
 }
 
 #content-header-description {
-  color: #666;
+  color: var(--text-dim);
   margin-top: 4px;
   font-size: 13px;
   white-space: nowrap;
@@ -351,7 +413,7 @@ body.browser-mode #intro {
    Section Headers
    ======================================== */
 .section-header {
-  color: #555;
+  color: var(--text-faint);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -376,16 +438,16 @@ body.browser-mode #intro {
 }
 
 .list-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bg-hover);
 }
 
 .list-item.selected {
-  background: #1a1a1a;
+  background: var(--bg-hover);
 }
 
 /* Icon Column - fixed width for alignment */
 .list-item-icon {
-  color: #888;
+  color: var(--text-muted);
   flex-shrink: 0;
   min-width: 20px;
   text-align: left;
@@ -491,15 +553,15 @@ body.browser-mode #intro {
    Add Option Buttons
    ======================================== */
 .add-option {
-  color: #666;
+  color: var(--text-dim);
   padding: 2px 8px;
   cursor: pointer;
 }
 
 .add-option:hover,
 .add-option.selected {
-  color: #0891b2;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent);
+  background: var(--bg-hover);
 }
 
 .add-option.disabled {
@@ -538,14 +600,33 @@ body.browser-mode #intro {
   left: 0;
   right: 0;
   padding: 8px 12px;
-  color: #888;
-  background: #000;
-  border-top: 1px solid #333;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 #shortcuts {
-  color: #666;
+  color: var(--text-dim);
   font-size: 13px;
+}
+
+/* Theme Toggle */
+#theme-toggle {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+#theme-toggle:hover {
+  color: var(--text-muted);
 }
 
 /* ========================================
@@ -674,7 +755,7 @@ svg.folder-icon {
 
 .markdown-content {
   padding: 16px 20px;
-  color: #e0e0e0;
+  color: var(--text);
   line-height: 1.6;
   font-size: 14px;
 }
@@ -683,32 +764,32 @@ svg.folder-icon {
 .md-h1 {
   font-size: 1.8em;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   margin: 0 0 16px 0;
   padding-bottom: 8px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border);
 }
 
 .md-h2 {
   font-size: 1.5em;
   font-weight: 600;
-  color: #fff;
+  color: var(--text);
   margin: 24px 0 12px 0;
   padding-bottom: 6px;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border);
 }
 
 .md-h3 {
   font-size: 1.25em;
   font-weight: 600;
-  color: #f0f0f0;
+  color: var(--text);
   margin: 20px 0 10px 0;
 }
 
 .md-h4, .md-h5, .md-h6 {
   font-size: 1.1em;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text);
   margin: 16px 0 8px 0;
 }
 
@@ -719,8 +800,8 @@ svg.folder-icon {
 
 /* Code */
 .md-inline-code {
-  background: #1a1a1a;
-  color: #0891b2;
+  background: var(--bg-hover);
+  color: var(--accent);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
@@ -728,8 +809,8 @@ svg.folder-icon {
 }
 
 .md-code-block {
-  background: #0a0a0a;
-  border: 1px solid #222;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 12px 16px;
   margin: 12px 0;
@@ -740,7 +821,7 @@ svg.folder-icon {
   font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
   font-size: 13px;
   line-height: 1.5;
-  color: #b0b0b0;
+  color: var(--text-muted);
 }
 
 /* Links */
@@ -787,17 +868,17 @@ svg.folder-icon {
 
 /* Blockquotes */
 .md-blockquote {
-  border-left: 3px solid #0891b2;
+  border-left: 3px solid var(--accent);
   margin: 12px 0;
   padding: 8px 16px;
-  color: #999;
-  background: #0a0a0a;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
 }
 
 /* Horizontal rule */
 .md-hr {
   border: none;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
   margin: 24px 0;
 }
 
@@ -830,4 +911,105 @@ del {
   color: #666;
   font-size: 11px;
   font-family: 'SF Mono', Monaco, monospace;
+}
+
+/* ========================================
+   PDF VIEWER - Floating Pages Style
+   ======================================== */
+
+/* Container - dark background, centers pages */
+.pdf-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 16px;
+  min-height: 100%;
+  background: transparent;
+}
+
+/* Individual PDF Page - floating white rectangle */
+.pdf-page {
+  position: relative;
+  background: #ffffff;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+
+  /* Standard US Letter proportions (8.5 x 11) */
+  width: 100%;
+  max-width: 560px;
+  aspect-ratio: 8.5 / 11;
+}
+
+/* Page content area */
+.pdf-page-content {
+  padding: 48px 40px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* Page title (first page) */
+.pdf-page-title {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+/* Placeholder lines container */
+.pdf-page-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Individual placeholder line */
+.pdf-line {
+  height: 8px;
+  background: #e8e8e8;
+  border-radius: 2px;
+}
+
+/* Paragraph gap */
+.pdf-line-gap {
+  height: 12px;
+}
+
+/* Page number indicator */
+.pdf-page-number {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 11px;
+  color: #999;
+}
+
+/* Canvas inside PDF page */
+.pdf-page canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Loading state */
+.pdf-loading {
+  color: #666;
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 14px;
+}
+
+/* Error state */
+.pdf-error {
+  color: #ff6b6b;
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 14px;
 }

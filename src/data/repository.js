@@ -1,18 +1,31 @@
 /**
  * Data Repository Module
  *
- * Environment-agnostic data persistence layer.
- * - Primary: localStorage (fast, synchronous)
- * - Secondary: Supabase cloud (async background sync)
- *
- * DATA FLOW:
- * 1. On app start: Try cloud first, fall back to localStorage
- * 2. On save: Save to localStorage immediately, then sync to cloud
+ * Markdown-based persistence layer.
+ * Stores objectives as .md files in the Objectives folder.
  */
 
-import { pullFromCloud, pushToCloud } from './supabase-sync.js';
+import {
+  loadAllObjectives,
+  saveObjective as saveObjectiveFile,
+  deleteObjective as deleteObjectiveFile,
+  isStorageAvailable,
+  getStorageStatus
+} from './markdown-storage.js';
 
-const STORAGE_KEY = 'objectiv-data';
+// ========================================
+// Configuration
+// ========================================
+
+// Set to true to enable dummy data fallback (for testing)
+const ENABLE_DUMMY_DATA = false;
+
+// ========================================
+// In-Memory Cache
+// ========================================
+
+let cachedData = null;
+let isInitialized = false;
 
 // ========================================
 // Utility Functions
@@ -48,10 +61,14 @@ export function calculateClarity(item) {
 }
 
 // ========================================
-// Dummy Data (for development/demo)
+// Dummy Data (disabled by default)
 // ========================================
 
 function getDummyData() {
+  if (!ENABLE_DUMMY_DATA) {
+    return { objectives: [] };
+  }
+
   const now = new Date();
   const hourAgo = new Date(now - 60 * 60 * 1000);
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
@@ -89,32 +106,6 @@ function getDummyData() {
           { id: 's2b', name: 'Did first workout - legs and core', loggedAt: dayAgo.toISOString(), orderNumber: 2 },
           { id: 's2c', name: 'Morning run - 2 miles', loggedAt: now.toISOString(), orderNumber: 3 }
         ]
-      },
-      {
-        id: 'obj3',
-        name: 'Launch side project',
-        description: '',
-        clarityScore: 28,
-        priorities: [
-          { id: 'p3a', name: 'Define MVP scope', description: '', clarityScore: 35 }
-        ],
-        steps: [
-          { id: 's3a', name: 'Brainstormed initial ideas', loggedAt: dayAgo.toISOString(), orderNumber: 1 }
-        ]
-      },
-      {
-        id: 'obj4',
-        name: 'Read more books',
-        description: 'Read at least 2 books per month across different genres',
-        clarityScore: 70,
-        priorities: [
-          { id: 'p4a', name: 'Set daily reading time', description: '30 minutes before bed', clarityScore: 90 },
-          { id: 'p4b', name: 'Join a book club', description: 'Find local or online community', clarityScore: 40 }
-        ],
-        steps: [
-          { id: 's4a', name: 'Finished "Atomic Habits"', loggedAt: twoDaysAgo.toISOString(), orderNumber: 1 },
-          { id: 's4b', name: 'Started "Deep Work"', loggedAt: hourAgo.toISOString(), orderNumber: 2 }
-        ]
       }
     ]
   };
@@ -125,51 +116,16 @@ function getDummyData() {
 // ========================================
 
 /**
- * Migrate from old hierarchy format if needed
- */
-function migrateData(oldData) {
-  const newObjectives = [];
-  for (const outcome of (oldData.outcomes || [])) {
-    for (const objective of (outcome.objectives || [])) {
-      const allPriorities = [];
-      const allSteps = [];
-
-      for (const priority of (objective.priorities || [])) {
-        allPriorities.push({
-          id: priority.id,
-          name: priority.name,
-          description: priority.description || ''
-        });
-        for (const step of (priority.steps || [])) {
-          allSteps.push({
-            id: step.id,
-            name: step.name,
-            loggedAt: step.done ? new Date().toISOString() : new Date().toISOString()
-          });
-        }
-      }
-
-      newObjectives.push({
-        id: objective.id,
-        name: objective.name,
-        description: objective.description || '',
-        priorities: allPriorities,
-        steps: allSteps
-      });
-    }
-  }
-  return { objectives: newObjectives };
-}
-
-/**
  * Ensure data has correct structure
  */
 function ensureStructure(data) {
-  if (data.objectives) {
-    for (const obj of data.objectives) {
-      if (!obj.priorities) obj.priorities = [];
-      if (!obj.steps) obj.steps = [];
-    }
+  if (!data) return { objectives: [] };
+  if (!data.objectives) data.objectives = [];
+
+  for (const obj of data.objectives) {
+    if (!obj.priorities) obj.priorities = [];
+    if (!obj.steps) obj.steps = [];
+    if (!obj.id) obj.id = generateId();
   }
   return data;
 }
@@ -179,88 +135,128 @@ function ensureStructure(data) {
 // ========================================
 
 /**
- * Initialize data from cloud (async)
- *
- * Call this ONCE when app starts. It:
- * 1. Tries to pull from Supabase
- * 2. If cloud has data, uses that (and caches to localStorage)
- * 3. If cloud is empty/unavailable, falls back to localStorage
- *
- * This ensures you always have the latest cloud data.
+ * Initialize and load data from markdown files
+ * Call this once when app starts
  */
-export async function initializeFromCloud() {
+export async function initializeData() {
+  if (isInitialized && cachedData) {
+    return cachedData;
+  }
+
   try {
-    // Try to get data from Supabase
-    const cloudData = await pullFromCloud();
-
-    if (cloudData) {
-      // Cloud has data! Cache it locally and use it.
-      console.log('📥 Using cloud data');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudData));
-      return ensureStructure(cloudData);
+    // Check if storage is available (folder selected + filesystem access)
+    if (!isStorageAvailable()) {
+      console.log('Storage not available, using empty data');
+      cachedData = getDummyData();
+      isInitialized = true;
+      return cachedData;
     }
 
-    // No cloud data - fall back to localStorage
-    console.log('📥 No cloud data, using local');
-    const localData = loadData();
+    // Load from markdown files
+    cachedData = await loadAllObjectives();
+    cachedData = ensureStructure(cachedData);
+    isInitialized = true;
 
-    // If we have local data, push it to cloud (first-time sync)
-    if (localData.objectives && localData.objectives.length > 0) {
-      console.log('📤 Pushing local data to cloud (first sync)');
-      pushToCloud(localData);
-    }
+    console.log('Initialized with', cachedData.objectives.length, 'objectives');
+    return cachedData;
 
-    return localData;
-
-  } catch (e) {
-    console.warn('Cloud init failed, using local:', e);
-    return loadData();
+  } catch (err) {
+    console.error('Failed to initialize data:', err);
+    cachedData = getDummyData();
+    isInitialized = true;
+    return cachedData;
   }
 }
 
 /**
- * Load data from storage (synchronous)
- * Uses localStorage in browser, file system in Electron
+ * Load data (synchronous if cached, async if not)
+ * For backward compatibility with existing code
  */
 export function loadData() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // Migrate from old format if needed
-      if (parsed.outcomes && !parsed.objectives) {
-        return migrateData(parsed);
-      }
-      return ensureStructure(parsed);
-    }
-  } catch (e) {
-    console.error('Failed to load data:', e);
+  if (cachedData) {
+    return cachedData;
   }
-  // Return dummy data for development
+  // Return empty data if not initialized
+  // The app should call initializeData() first
   return getDummyData();
 }
 
 /**
- * Save data to storage
- *
- * This does TWO things:
- * 1. Saves to localStorage immediately (fast, synchronous)
- * 2. Queues a cloud sync (async, debounced)
- *
- * The cloud sync is fire-and-forget - if it fails, data is still
- * safe in localStorage.
+ * Reload data from filesystem (invalidates cache)
  */
-export function saveData(data) {
-  // Step 1: Save locally (this is instant)
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.error('Failed to save data:', e);
+export async function reloadData() {
+  cachedData = null;
+  isInitialized = false;
+  return initializeData();
+}
+
+/**
+ * Save all data
+ * Writes each objective to its markdown file
+ */
+export async function saveData(data) {
+  cachedData = ensureStructure(data);
+
+  if (!isStorageAvailable()) {
+    console.warn('Storage not available, data not persisted');
+    return;
   }
 
-  // Step 2: Sync to cloud (background, debounced)
-  pushToCloud(data);
+  // Save each objective to its file
+  const savePromises = cachedData.objectives.map(obj => {
+    return saveObjectiveFile(obj).catch(err => {
+      console.error('Failed to save objective:', obj.name, err);
+    });
+  });
+
+  await Promise.all(savePromises);
 }
+
+/**
+ * Save a single objective
+ */
+export async function saveOneObjective(objective) {
+  if (!isStorageAvailable()) {
+    console.warn('Storage not available');
+    return;
+  }
+
+  await saveObjectiveFile(objective);
+}
+
+/**
+ * Delete an objective
+ */
+export async function deleteOneObjective(objective) {
+  if (!isStorageAvailable()) {
+    console.warn('Storage not available');
+    return;
+  }
+
+  await deleteObjectiveFile(objective);
+
+  // Remove from cache
+  if (cachedData) {
+    cachedData.objectives = cachedData.objectives.filter(o => o.id !== objective.id);
+  }
+}
+
+/**
+ * Invalidate the cache (call after folder change)
+ */
+export function invalidateCache() {
+  cachedData = null;
+  isInitialized = false;
+}
+
+/**
+ * Get storage status for UI feedback
+ */
+export { getStorageStatus };
+
+// ========================================
+// Factory Functions
+// ========================================
 
 /**
  * Create a new objective
@@ -270,6 +266,7 @@ export function createObjective(name = '', description = '') {
     id: generateId(),
     name,
     description,
+    createdAt: new Date().toISOString(),
     priorities: [],
     steps: []
   };
@@ -298,11 +295,19 @@ export function createStep(name = '', orderNumber = 1) {
   };
 }
 
-// Default export for convenience
+// ========================================
+// Default Export
+// ========================================
+
 export default {
-  initializeFromCloud,
+  initializeData,
   loadData,
+  reloadData,
   saveData,
+  saveOneObjective,
+  deleteOneObjective,
+  invalidateCache,
+  getStorageStatus,
   generateId,
   calculateClarity,
   createObjective,

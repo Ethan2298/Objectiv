@@ -31,42 +31,12 @@ export function isClarityAvailable() {
 }
 
 /**
- * Request LLM clarity calculation for an item (queued to prevent flicker)
+ * CLARITY_DISABLED: LLM clarity calculation disabled
+ * See "Archived code/clarity-badge-scoring.md" for original implementation
  */
 export function refreshClarity(item, isPromptMode = false) {
-  // Don't refresh during prompts (editing/adding) to avoid disruption
-  if (isPromptMode) {
-    console.log('Skipping clarity (prompt mode):', item.name);
-    return;
-  }
-
-  if (!item.name || !item.name.trim()) {
-    item.clarityScore = 0;
-    return;
-  }
-
-  // Check if we already have a score for this exact name+description combo
-  const cacheKey = `${item.name}|${item.description || ''}`;
-  if (item._clarityKey === cacheKey && item.clarityScore !== undefined) {
-    console.log('Already scored:', item.name, item.clarityScore + '%');
-    return;
-  }
-
-  // Don't queue duplicates
-  if (item._clarityQueued || item._clarityLoading) {
-    console.log('Already queued/loading:', item.name);
-    return;
-  }
-
-  console.log('Queuing for clarity:', item.name);
-  item._clarityQueued = true;
-  clarityQueue.push(item);
-
-  // Process queue after a short delay (batch multiple items)
-  if (!clarityProcessing) {
-    clarityProcessing = true;
-    setTimeout(processClarityQueue, 100);
-  }
+  // CLARITY_DISABLED: Feature disabled, return early to skip API calls
+  return;
 }
 
 /**
@@ -122,40 +92,22 @@ async function processClarityQueue() {
 }
 
 /**
- * Refresh clarity for all items in data
+ * CLARITY_DISABLED: Refresh clarity for all items (disabled)
+ * See "Archived code/clarity-badge-scoring.md" for original implementation
  */
 export async function refreshAllClarity(data) {
-  const items = [...data.objectives];
-  data.objectives.forEach(obj => {
-    if (obj.priorities) items.push(...obj.priorities);
-  });
-
-  for (const item of items) {
-    const cacheKey = `${item.name}|${item.description || ''}`;
-    if (item._clarityKey !== cacheKey) {
-      refreshClarity(item, false);
-    }
-  }
+  // CLARITY_DISABLED: Feature disabled, return early
+  return;
 }
 
 /**
- * Get clarity display HTML for meta column
+ * CLARITY_DISABLED: Get clarity display HTML for meta column
+ * Now returns only edit button (clarity scoring disabled)
+ * See "Archived code/clarity-badge-scoring.md" for original implementation
  */
 export function getClarityMeta(item, section = 'objectives', index = 0) {
-  const clarity = calculateClarity(item);
-
-  if (item._clarityLoading) {
-    return `<span class="clarity-score">...</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
-  }
-
-  let scoreText;
-  if (item.clarityScore !== undefined && item.clarityScore !== null) {
-    scoreText = `${item.clarityScore}%`;
-  } else {
-    scoreText = '—';
-  }
-
-  return `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
+  // CLARITY_DISABLED: Original showed score + badge, now just edit button
+  return `<span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
 }
 
 export default {

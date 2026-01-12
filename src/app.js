@@ -10,7 +10,6 @@
 // ========================================
 
 import * as Repository from './data/repository.js';
-import * as SupabaseSync from './data/supabase-sync.js';
 import * as State from './state/store.js';
 import * as SideListState from './state/side-list-state.js';
 import * as Utils from './utils.js';
@@ -19,6 +18,7 @@ import * as ListItem from './components/list-item.js';
 import * as EditController from './controllers/edit-controller.js';
 import * as FolderExplorer from './components/folder-explorer.js';
 import * as Markdown from './utils/markdown.js';
+import * as PdfRenderer from './utils/pdf-renderer.js';
 
 // ========================================
 // Re-export for global access
@@ -27,7 +27,6 @@ import * as Markdown from './utils/markdown.js';
 // Make modules available globally for gradual migration
 window.Objectiv = {
   Repository,
-  SupabaseSync,
   State,
   SideListState,
   Utils,
@@ -35,7 +34,8 @@ window.Objectiv = {
   ListItem,
   EditController,
   FolderExplorer,
-  Markdown
+  Markdown,
+  PdfRenderer
 };
 
 // ========================================
@@ -83,7 +83,8 @@ export {
   ListItem,
   EditController,
   FolderExplorer,
-  Markdown
+  Markdown,
+  PdfRenderer
 };
 
 export default {
@@ -96,5 +97,6 @@ export default {
   EditController,
   FolderExplorer,
   Markdown,
+  PdfRenderer,
   init
 };

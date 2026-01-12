@@ -6,6 +6,13 @@
  */
 
 // ========================================
+// Configuration
+// ========================================
+
+// Set to true to enable demo/dummy data (for testing only)
+const ENABLE_DEMO_MODE = false;
+
+// ========================================
 // State
 // ========================================
 
@@ -142,9 +149,16 @@ const DUMMY_FOLDER_STRUCTURE = {
   '/notes': [
     { name: 'inbox', isDirectory: true, path: '/notes/inbox' },
     { name: 'projects', isDirectory: true, path: '/notes/projects' },
+    { name: 'documents', isDirectory: true, path: '/notes/documents' },
     { name: 'journal', isDirectory: true, path: '/notes/journal' },
     { name: 'references', isDirectory: true, path: '/notes/references' },
     { name: 'README.md', isDirectory: false, path: '/notes/README.md' }
+  ],
+  '/notes/documents': [
+    { name: 'project-proposal.pdf', isDirectory: false, path: '/notes/documents/project-proposal.pdf' },
+    { name: 'meeting-minutes.pdf', isDirectory: false, path: '/notes/documents/meeting-minutes.pdf' },
+    { name: 'invoice-2025-001.pdf', isDirectory: false, path: '/notes/documents/invoice-2025-001.pdf' },
+    { name: 'user-guide.pdf', isDirectory: false, path: '/notes/documents/user-guide.pdf' }
   ],
   '/notes/inbox': [
     { name: 'quick-capture.md', isDirectory: false, path: '/notes/inbox/quick-capture.md' },
@@ -198,6 +212,28 @@ const DUMMY_FOLDER_STRUCTURE = {
 
 // Dummy file contents for browser mode
 const DUMMY_FILE_CONTENTS = {
+  // PDF files - stored as metadata objects for demo rendering
+  '/notes/documents/project-proposal.pdf': {
+    type: 'pdf',
+    pageCount: 5,
+    title: 'Q1 2025 Project Proposal'
+  },
+  '/notes/documents/meeting-minutes.pdf': {
+    type: 'pdf',
+    pageCount: 2,
+    title: 'Weekly Team Meeting Minutes'
+  },
+  '/notes/documents/invoice-2025-001.pdf': {
+    type: 'pdf',
+    pageCount: 1,
+    title: 'Invoice #2025-001'
+  },
+  '/notes/documents/user-guide.pdf': {
+    type: 'pdf',
+    pageCount: 8,
+    title: 'Objectiv.go User Guide'
+  },
+
   '/notes/README.md': `# Personal Notes
 
 Welcome to my notes folder. This is where I keep all my thoughts, plans, and references organized.
@@ -1191,6 +1227,8 @@ export function getDummyFileContent(filePath) {
 
 // Check if running in demo mode (browser or forced demo)
 export function isDummyMode() {
+  // Demo mode is disabled by default
+  if (!ENABLE_DEMO_MODE) return false;
   return state.demoMode || !window.electronAPI?.folderExplorer;
 }
 

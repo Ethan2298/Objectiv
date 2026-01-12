@@ -195,6 +195,46 @@ function createWindow() {
       return { success: false, error: err.message };
     }
   });
+
+  // Write file contents
+  ipcMain.handle('folder-explorer:write-file', async (event, filePath, content) => {
+    try {
+      fs.writeFileSync(filePath, content, 'utf-8');
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Delete file
+  ipcMain.handle('folder-explorer:delete-file', async (event, filePath) => {
+    try {
+      fs.unlinkSync(filePath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Rename/move file
+  ipcMain.handle('folder-explorer:rename-file', async (event, oldPath, newPath) => {
+    try {
+      fs.renameSync(oldPath, newPath);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // Create directory (recursive)
+  ipcMain.handle('folder-explorer:mkdir', async (event, dirPath) => {
+    try {
+      fs.mkdirSync(dirPath, { recursive: true });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 app.whenReady().then(createWindow);

@@ -6,6 +6,15 @@
   <title>Objectiv.go</title>
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PDF libraries for real PDF rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    // Configure pdf.js worker
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
   <script type="module" src="src/app.js"></script>
 </head>
 <body>
@@ -50,6 +59,7 @@
     <!-- Status Bar -->
     <div id="status-bar">
       <div id="shortcuts">[↑↓] Navigate  [a] Add  [s] Step  [f] Folder</div>
+      <button id="theme-toggle" title="Toggle theme">☀</button>
     </div>
 
     <!-- Message Toast -->
@@ -84,24 +94,38 @@
       document.body.classList.add('browser-mode');
     }
 
+    // Theme toggle
+    (function() {
+      const toggle = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('objectiv-theme');
+      if (stored === 'light') {
+        document.body.classList.add('light-mode');
+        toggle.textContent = '☾';
+      }
+      toggle.addEventListener('click', () => {
+        const isLight = document.body.classList.toggle('light-mode');
+        toggle.textContent = isLight ? '☾' : '☀';
+        localStorage.setItem('objectiv-theme', isLight ? 'light' : 'dark');
+      });
+    })();
+
     // Status reporter functions
     function updateStatusReporter() {
       const container = document.getElementById('status-items');
       if (!container) return;
 
-      // Get cloud sync status
-      const syncStatus = window.Objectiv?.SupabaseSync?.getSyncStatus?.() || { configured: false };
-      const cloudLabel = syncStatus.configured
-        ? (syncStatus.syncing ? 'syncing...' : 'connected')
-        : 'not configured';
-      const cloudStatus = syncStatus.configured ? 'ok' : 'warn';
+      // Get markdown storage status
+      const storageStatus = window.Objectiv?.Repository?.getStorageStatus?.() || { isReady: false };
+      const storageLabel = storageStatus.isReady
+        ? 'ready'
+        : (storageStatus.rootPath ? 'no folder' : 'select folder');
+      const storageSt = storageStatus.isReady ? 'ok' : 'warn';
 
       const items = [
         { label: 'Platform', value: systemStatus.platform, status: 'ok' },
-        { label: 'Storage', value: systemStatus.localStorage ? 'ok' : 'failed', status: systemStatus.localStorage ? 'ok' : 'err' },
-        { label: 'Cloud Sync', value: cloudLabel, status: cloudStatus },
-        { label: 'Taglines', value: systemStatus.taglines ? 'loaded' : 'fallback', status: systemStatus.taglines ? 'ok' : 'warn' },
-        { label: 'Clarity AI', value: systemStatus.clarityAPI ? 'ready' : 'unavailable', status: systemStatus.clarityAPI ? 'ok' : 'warn' }
+        { label: 'Files', value: storageLabel, status: storageSt },
+        { label: 'Taglines', value: systemStatus.taglines ? 'loaded' : 'fallback', status: systemStatus.taglines ? 'ok' : 'warn' }
+        // CLARITY_DISABLED: Removed "Clarity AI" status - see "Archived code/clarity-badge-scoring.md"
       ];
 
       container.innerHTML = items.map(item =>
@@ -171,32 +195,27 @@
     const STORAGE_KEY = 'objectiv-data';
     let data = loadData();
 
-    // Cloud sync initialization (non-blocking)
-    // Runs after local data loads, checks cloud for newer data
-    async function initCloudSync() {
-      if (!window.Objectiv?.SupabaseSync?.pullFromCloud) {
-        console.log('☁️ Cloud sync not available (module not loaded)');
+    // Markdown storage initialization (non-blocking)
+    // Runs after modules load, loads objectives from markdown files
+    async function initMarkdownStorage() {
+      if (!window.Objectiv?.Repository?.initializeData) {
+        console.log('📁 Repository module not loaded yet');
         return;
       }
       try {
-        const cloudData = await window.Objectiv.SupabaseSync.pullFromCloud();
-        if (cloudData && cloudData.objectives) {
-          // Cloud has data - use it
-          console.log('☁️ Loaded', cloudData.objectives.length, 'objectives from cloud');
-          data = cloudData;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        const loadedData = await window.Objectiv.Repository.initializeData();
+        if (loadedData && loadedData.objectives) {
+          console.log('📁 Loaded', loadedData.objectives.length, 'objectives from markdown files');
+          data = loadedData;
           if (window.updateView) updateView();
-        } else if (data.objectives && data.objectives.length > 0) {
-          // No cloud data but we have local - push it up (first sync)
-          console.log('☁️ First sync: pushing local data to cloud');
-          window.Objectiv.SupabaseSync.pushToCloud(data);
+          updateStatusReporter();
         }
       } catch (e) {
-        console.warn('☁️ Cloud init failed:', e);
+        console.warn('📁 Markdown storage init failed:', e);
       }
     }
     // Run after a short delay to let modules load
-    setTimeout(initCloudSync, 500);
+    setTimeout(initMarkdownStorage, 500);
 
     // Navigation state (simplified for split-pane)
     let selectedObjectiveIndex = 0;  // Which objective is selected in side list
@@ -214,32 +233,22 @@
     let promptTargetSection = null;
     let skipBlurHandler = false; // Prevents stale blur handlers when switching edits
 
-    // Load data from localStorage
+    // Load data (synchronous initial load - real data loaded async by initMarkdownStorage)
     function loadData() {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          // Migrate from old format if needed
-          if (parsed.outcomes && !parsed.objectives) {
-            return migrateData(parsed);
-          }
-          // Ensure new structure
-          if (parsed.objectives) {
-            for (const obj of parsed.objectives) {
-              if (!obj.priorities) obj.priorities = [];
-              if (!obj.steps) obj.steps = [];
-            }
-          }
-          return parsed;
-        }
-      } catch (e) {}
-      // Return dummy data for development
-      return getDummyData();
+      // Return empty data initially - initMarkdownStorage will load from files
+      return { objectives: [] };
     }
 
-    // Dummy data for development/demo
+    // Configuration: Set to true to enable dummy data (for testing only)
+    const ENABLE_DUMMY_DATA = false;
+
+    // Dummy data for development/demo (disabled by default)
     function getDummyData() {
+      // Return empty data when disabled
+      if (!ENABLE_DUMMY_DATA) {
+        return { objectives: [] };
+      }
+
       const now = new Date();
       const hourAgo = new Date(now - 60 * 60 * 1000);
       const twoHoursAgo = new Date(now - 2 * 60 * 60 * 1000);
@@ -377,12 +386,13 @@
       return { objectives: newObjectives };
     }
 
-    // Save data to localStorage + cloud sync
+    // Save data to markdown files
     function saveData() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      // Also sync to cloud (if Supabase is configured)
-      if (window.Objectiv?.SupabaseSync?.pushToCloud) {
-        window.Objectiv.SupabaseSync.pushToCloud(data);
+      // Save to markdown files via Repository
+      if (window.Objectiv?.Repository?.saveData) {
+        window.Objectiv.Repository.saveData(data).catch(err => {
+          console.error('Failed to save data:', err);
+        });
       }
     }
 
@@ -440,28 +450,11 @@
       return 'very clear';
     }
 
-    // Get clarity display HTML with score, badge, and edit button
-    // Fuzzy = lighter grey (stands out), Clear = fades to background
-    // Edit button appears on hover (via CSS)
+    // CLARITY_DISABLED: AI clarity badge scoring disabled - see "Archived code/clarity-badge-scoring.md"
+    // Get clarity display HTML - now returns only edit button (clarity scoring disabled)
     function getClarityDisplay(item, section = 'objectives', index = 0) {
-      const clarity = calculateClarity(item);
-
-      if (item._clarityLoading) {
-        return '<span class="clarity-score">...</span><span class="edit-btn" data-section="' + section + '" data-index="' + index + '">edit</span>';
-      }
-
-      let score = item.clarityScore;
-      let scoreText;
-
-      if (score !== undefined && score !== null) {
-        scoreText = `${score}%`;
-      } else {
-        // Fallback score based on word count clarity
-        score = clarity === 'fuzzy' ? 15 : clarity === 'forming' ? 45 : 75;
-        scoreText = '—';
-      }
-
-      return `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
+      // CLARITY_DISABLED: Original showed score + badge, now just edit button
+      return `<span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
     }
 
     // ========================================
@@ -532,67 +525,24 @@
     }
 
     /**
-     * Get clarity meta HTML for list items
-     * Shows score + badge normally, edit button on hover
+     * CLARITY_DISABLED: Get clarity meta HTML for list items
+     * Now returns only edit button (clarity scoring disabled)
+     * See "Archived code/clarity-badge-scoring.md" for original implementation
      */
     function getClarityMeta(item, section = 'objectives', index = 0) {
-      const clarity = calculateClarity(item);
-
-      if (item._clarityLoading) {
-        return `<span class="clarity-score">...</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
-      }
-
-      let score = item.clarityScore;
-      let scoreText;
-
-      if (score !== undefined && score !== null) {
-        scoreText = `${score}%`;
-      } else {
-        scoreText = '—';
-      }
-
-      return `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
+      // CLARITY_DISABLED: Original showed score + badge, now just edit button
+      return `<span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
     }
 
-    // Pending clarity requests (to batch updates)
+    // CLARITY_DISABLED: Pending clarity requests (disabled - no API calls)
     let clarityQueue = [];
     let clarityProcessing = false;
 
-    // Request LLM clarity calculation for an item (queued to prevent flicker)
+    // CLARITY_DISABLED: LLM clarity calculation disabled
+    // See "Archived code/clarity-badge-scoring.md" for original implementation
     function refreshClarity(item) {
-      // Don't refresh during prompts (editing/adding) to avoid disruption
-      if (promptMode) {
-        console.log('⏸️ Skipping clarity (prompt mode):', item.name);
-        return;
-      }
-
-      if (!item.name || !item.name.trim()) {
-        item.clarityScore = 0;
-        return;
-      }
-
-      // Check if we already have a score for this exact name+description combo
-      const cacheKey = `${item.name}|${item.description || ''}`;
-      if (item._clarityKey === cacheKey && item.clarityScore !== undefined) {
-        console.log('✓ Already scored:', item.name, item.clarityScore + '%');
-        return; // Already calculated for this content
-      }
-
-      // Don't queue duplicates
-      if (item._clarityQueued || item._clarityLoading) {
-        console.log('⏳ Already queued/loading:', item.name);
-        return;
-      }
-
-      console.log('📥 Queuing for clarity:', item.name);
-      item._clarityQueued = true;
-      clarityQueue.push(item);
-
-      // Process queue after a short delay (batch multiple items)
-      if (!clarityProcessing) {
-        clarityProcessing = true;
-        setTimeout(processClarityQueue, 100);
-      }
+      // CLARITY_DISABLED: Feature disabled, return early to skip API calls
+      return;
     }
 
     async function processClarityQueue() {
@@ -644,19 +594,11 @@
       }
     }
 
-    // Refresh clarity for all items that need it
+    // CLARITY_DISABLED: Refresh clarity for all items (disabled)
+    // See "Archived code/clarity-badge-scoring.md" for original implementation
     async function refreshAllClarity() {
-      const items = [...data.objectives];
-      data.objectives.forEach(obj => {
-        if (obj.priorities) items.push(...obj.priorities);
-      });
-
-      for (const item of items) {
-        const cacheKey = `${item.name}|${item.description || ''}`;
-        if (item._clarityKey !== cacheKey) {
-          await refreshClarity(item);
-        }
-      }
+      // CLARITY_DISABLED: Feature disabled, return early
+      return;
     }
 
     // Capitalize first letter
@@ -834,6 +776,17 @@
       const indicator = '<span class="side-item-indicator">●</span>';
 
       switch (itemData.type) {
+        case ItemType.SELECT_VAULT:
+          item.className = 'side-item select-vault' + (isSelected ? ' selected' : '');
+          item.dataset.type = 'select-vault';
+          item.innerHTML = `
+            <i data-lucide="folder-open" class="folder-icon"></i>
+            <span class="side-item-name">Select your folder</span>
+            <span class="side-item-indicator">●</span>
+          `;
+          item.onclick = () => handleSideItemClick(idx, itemData);
+          break;
+
         case ItemType.OBJECTIVE:
           const isEditing = promptMode === 'add' && promptTargetSection === 'objectives' && promptTargetIndex === itemData.index;
           item.dataset.type = 'objective';
@@ -928,6 +881,10 @@
       // Action to run after scroll completes
       async function executeAction() {
         switch (itemData.type) {
+          case ItemType.SELECT_VAULT:
+            await selectVault();
+            break;
+
           case ItemType.OBJECTIVE:
             commitEditInPlace();
             selectedObjectiveIndex = itemData.index;
@@ -1041,6 +998,56 @@
       return folderPath;
     }
 
+    // Select vault (main entry point for vault selection)
+    // Opens folder picker, sets root path, creates Objectives folder, loads objectives
+    async function selectVault() {
+      if (!window.electronAPI?.folderExplorer) {
+        showMessage('Folder selection requires the desktop app');
+        return;
+      }
+
+      // Open native folder picker
+      const folderPath = await window.electronAPI.folderExplorer.pickFolder();
+      if (!folderPath) {
+        // User cancelled
+        return;
+      }
+
+      const FolderExplorer = window.Objectiv?.FolderExplorer;
+      const SideListState = window.Objectiv?.SideListState;
+      const Repository = window.Objectiv?.Repository;
+
+      // Clear caches before changing root
+      if (FolderExplorer) {
+        FolderExplorer.clearCache?.();
+        FolderExplorer.setDemoMode?.(false);  // Ensure demo mode is off
+      }
+      if (Repository) {
+        Repository.invalidateCache?.();
+      }
+
+      // Set the new root path (this triggers Objectives folder creation via markdown-storage)
+      if (SideListState) {
+        SideListState.setRootPath(folderPath);
+      }
+      if (FolderExplorer) {
+        FolderExplorer.setRootPath?.(folderPath);
+      }
+
+      // Reload objectives from the new vault
+      if (Repository) {
+        data = await Repository.initializeData();
+      }
+
+      // Reset view state
+      selectedObjectiveIndex = data.objectives.length > 0 ? 0 : -1;
+      viewMode = data.objectives.length > 0 ? 'objective' : 'empty';
+      selectedFilePath = null;
+
+      // Re-render everything
+      updateView();
+    }
+
     // Get shortened path for display
     function getShortPath(fullPath) {
       if (!fullPath) return '';
@@ -1132,10 +1139,34 @@
       const body = document.getElementById('content-body');
 
       const fileName = selectedFilePath.split('/').pop();
-      const content = selectedFileContent || '';
+      const content = selectedFileContent;
+
+      // Check if it's a PDF file
+      const Markdown = window.Objectiv?.Markdown;
+      const PdfRenderer = window.Objectiv?.PdfRenderer;
+
+      if (Markdown?.isPdfFile && Markdown.isPdfFile(fileName)) {
+        // PDF file - render real PDF with floating pages
+        headerTitle.textContent = fileName;
+        headerDesc.textContent = '';
+
+        // Check if content is PDF metadata (demo mode) - render real PDF
+        if (PdfRenderer?.isPdfMetadata && PdfRenderer.isPdfMetadata(content)) {
+          PdfRenderer.renderPdf(body, content);
+        } else if (PdfRenderer?.renderPdf) {
+          // Real PDF binary data
+          PdfRenderer.renderPdf(body, { title: fileName, pageCount: 1 });
+        } else {
+          body.innerHTML = '<div class="pdf-container"><div class="pdf-error">PDF renderer not available</div></div>';
+        }
+        return;
+      }
+
+      // Non-PDF: proceed with text/markdown rendering
+      const contentStr = (typeof content === 'string') ? content : '';
 
       // Extract first line as title, rest as body content
-      const lines = content.split('\n');
+      const lines = contentStr.split('\n');
       let title = lines[0] || fileName;
       let bodyContent = lines.slice(1).join('\n').trimStart();
 
@@ -1146,7 +1177,6 @@
       headerDesc.textContent = '';
 
       // Check if it's a markdown file or text file
-      const Markdown = window.Objectiv?.Markdown;
       if (!Markdown) {
         body.innerHTML = `<pre style="color:#888;white-space:pre-wrap;padding:16px;">${escapeHtml(bodyContent)}</pre>`;
         return;
@@ -1176,10 +1206,20 @@
       const headerDesc = document.getElementById('content-header-description');
       const body = document.getElementById('content-body');
 
-      // Handle no objectives
+      // Handle no vault selected or no objectives
+      const SideListState = window.Objectiv?.SideListState;
+      const hasVault = SideListState?.getRootPath?.();
+
+      if (!hasVault) {
+        headerTitle.textContent = 'Welcome to Objectiv';
+        headerDesc.textContent = 'Select a folder to use as your vault';
+        body.innerHTML = '';
+        return;
+      }
+
       if (data.objectives.length === 0) {
         headerTitle.textContent = 'No objectives yet';
-        headerDesc.textContent = 'Add your first objective from the left panel';
+        headerDesc.textContent = 'Add your first objective to get started';
         body.innerHTML = '';
         return;
       }
@@ -1227,22 +1267,15 @@
         let textContent = priority.name;
         if (isRefining) textContent = priority.description || '';
 
-        // Get clarity display without edit button for priorities
-        const clarity = calculateClarity(priority);
-        let clarityMeta = '';
-        if (priority._clarityLoading) {
-          clarityMeta = '<span class="clarity-score">...</span>';
-        } else {
-          const scoreText = priority.clarityScore !== undefined ? `${priority.clarityScore}%` : '—';
-          clarityMeta = `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span>`;
-        }
+        // CLARITY_DISABLED: Clarity display removed for priorities
+        // See "Archived code/clarity-badge-scoring.md" for original implementation
 
         const listItem = createListItem({
           icon: '',
           iconClass: '',
           content: textContent,
           contentEditable: isInEditMode,
-          meta: clarityMeta,
+          meta: '', // CLARITY_DISABLED: was clarityMeta with score + badge
           selected: false
         });
 
@@ -1648,37 +1681,10 @@
     }
 
     // ========================================
-    // NOTCH SOUND - Warm retro 80s camera tick
+    // NOTCH SOUND - Disabled
     // ========================================
-    let audioCtx = null;
     function playNotch() {
-      if (!audioCtx) audioCtx = new AudioContext();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const t = audioCtx.currentTime;
-
-      // Warm mid tick - rounder, less harsh
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 1100;  // Lower = warmer
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      gain.gain.setValueAtTime(0.05, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.018);
-      osc.start(t);
-      osc.stop(t + 0.025);
-
-      // Deeper body thump
-      const thump = audioCtx.createOscillator();
-      const thumpGain = audioCtx.createGain();
-      thump.type = 'sine';
-      thump.frequency.value = 90;  // Deeper
-      thump.connect(thumpGain);
-      thumpGain.connect(audioCtx.destination);
-      thumpGain.gain.setValueAtTime(0.06, t);
-      thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.035);
-      thump.start(t);
-      thump.stop(t + 0.04);
+      // Sound disabled
     }
 
     // ========================================
@@ -1978,6 +1984,81 @@
     }
 
     /**
+     * Start editing the objective title in the content header
+     */
+    function startEditObjectiveTitle() {
+      const obj = data.objectives[selectedObjectiveIndex];
+      if (!obj) return;
+
+      const titleEl = document.getElementById('content-header-title');
+      if (!titleEl) return;
+
+      // Don't start if already editing
+      if (promptMode) return;
+
+      // Set up prompt state
+      promptMode = 'edit';
+      promptStep = 0;
+      promptTargetIndex = selectedObjectiveIndex;
+      promptTargetSection = 'objectives';
+      promptData = { type: 'objective', item: obj };
+
+      // Make element editable
+      titleEl.setAttribute('contenteditable', 'true');
+
+      // Focus and place cursor at end
+      titleEl.focus();
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(titleEl);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      // Blur handler as fallback
+      titleEl.addEventListener('blur', () => {
+        if (skipBlurHandler) {
+          skipBlurHandler = false;
+          return;
+        }
+        if (promptMode === 'edit' && promptTargetSection === 'objectives') {
+          commitObjectiveTitleEdit();
+        }
+      }, { once: true });
+
+      updateStatusBar();
+    }
+
+    /**
+     * Commit objective title edit
+     */
+    function commitObjectiveTitleEdit() {
+      if (promptMode !== 'edit' || promptTargetSection !== 'objectives') return;
+
+      const titleEl = document.getElementById('content-header-title');
+      if (!titleEl) return;
+
+      skipBlurHandler = true;
+
+      const value = titleEl.textContent.trim();
+      const obj = data.objectives[selectedObjectiveIndex];
+
+      if (value && obj) {
+        obj.name = value;
+        saveData();
+        // Also update sidebar
+        renderSideList();
+      } else if (obj) {
+        // Restore original if empty
+        titleEl.textContent = obj.name;
+      }
+
+      titleEl.removeAttribute('contenteditable');
+      resetPromptState();
+      updateStatusBar();
+    }
+
+    /**
      * Main mousedown handler - single decision point for all edit interactions
      */
     document.addEventListener('mousedown', (e) => {
@@ -1988,9 +2069,16 @@
       const clickedListItem = e.target.closest('.list-item[data-section]');
       const clickedSideItem = e.target.closest('.side-item:not(.add-option)');
       const clickedAddOption = e.target.closest('.add-option');
+      const clickedTitle = e.target.closest('#content-header-title');
 
       // CASE 1: Not currently editing - just let clicks proceed normally
       if (!currentEditable || !promptMode) {
+        // If clicking the objective title, start editing it
+        if (clickedTitle && data.objectives.length > 0) {
+          e.preventDefault();
+          startEditObjectiveTitle();
+          return;
+        }
         // If clicking a list item, start editing it
         if (clickedListItem) {
           e.preventDefault();
@@ -2001,6 +2089,11 @@
           }
         }
         // Side items and add options have their own handlers
+        return;
+      }
+
+      // Currently editing the title - clicking on it should continue editing
+      if (clickedTitle && promptTargetSection === 'objectives') {
         return;
       }
 
@@ -2017,6 +2110,13 @@
         e.preventDefault();
         const section = clickedListItem.dataset.section;
         const index = parseInt(clickedListItem.dataset.index, 10);
+
+        // Handle objective title edit specially
+        if (promptTargetSection === 'objectives') {
+          commitObjectiveTitleEdit();
+          startEditInPlace(section, index, clickedListItem);
+          return;
+        }
 
         // Commit current edit in place
         const { needsRerender, removedElement } = commitEditInPlace();
@@ -2045,9 +2145,14 @@
 
       // CASE 4: Clicking on add option - commit and let add handler run
       if (clickedAddOption) {
-        const { needsRerender } = commitEditInPlace();
-        if (needsRerender) {
-          updateView();
+        // Handle objective title edit specially
+        if (promptTargetSection === 'objectives') {
+          commitObjectiveTitleEdit();
+        } else {
+          const { needsRerender } = commitEditInPlace();
+          if (needsRerender) {
+            updateView();
+          }
         }
         // Let the click event proceed to the add option's onclick
         return;
@@ -2055,18 +2160,28 @@
 
       // CASE 5: Clicking on side item - commit and let selection happen
       if (clickedSideItem) {
-        const { needsRerender } = commitEditInPlace();
-        if (needsRerender) {
-          updateView();
+        // Handle objective title edit specially
+        if (promptTargetSection === 'objectives') {
+          commitObjectiveTitleEdit();
+        } else {
+          const { needsRerender } = commitEditInPlace();
+          if (needsRerender) {
+            updateView();
+          }
         }
         // Let the click event proceed to select the objective
         return;
       }
 
       // CASE 6: Clicking elsewhere (empty space) - just commit and close
-      const { needsRerender } = commitEditInPlace();
-      if (needsRerender) {
-        updateView();
+      // Handle objective title edit specially
+      if (promptTargetSection === 'objectives') {
+        commitObjectiveTitleEdit();
+      } else {
+        const { needsRerender } = commitEditInPlace();
+        if (needsRerender) {
+          updateView();
+        }
       }
       updateStatusBar();
     });
@@ -2075,6 +2190,29 @@
     document.addEventListener('keydown', (e) => {
       // Handle prompt input
       if (promptMode === 'add' || promptMode === 'edit' || promptMode === 'refine') {
+        // Special handling for objective title editing
+        if (promptMode === 'edit' && promptTargetSection === 'objectives') {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            // Restore original and cancel
+            const titleEl = document.getElementById('content-header-title');
+            const obj = data.objectives[selectedObjectiveIndex];
+            if (titleEl && obj) {
+              titleEl.textContent = obj.name;
+              titleEl.removeAttribute('contenteditable');
+            }
+            resetPromptState();
+            updateStatusBar();
+            return;
+          }
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            commitObjectiveTitleEdit();
+            return;
+          }
+          return;
+        }
+
         if (e.key === 'Escape') {
           e.preventDefault();
           cancelPrompt();
@@ -2202,6 +2340,10 @@
       if (!item) return;
 
       switch (item.type) {
+        case ItemType.SELECT_VAULT:
+          await selectVault();
+          break;
+
         case ItemType.OBJECTIVE:
           // Already selected, maybe start editing?
           break;
@@ -2217,8 +2359,7 @@
           break;
 
         case ItemType.SET_FOLDER:
-          await pickFolder();
-          await renderSideList();
+          await selectVault();  // Use selectVault instead of pickFolder for consistency
           break;
 
         case ItemType.FOLDER:
@@ -2268,15 +2409,37 @@
     async function init() {
       await showIntro();
 
-      // Enable demo mode with dummy data (works in both browser and Electron)
       const FolderExplorer = window.Objectiv?.FolderExplorer;
       const SideListState = window.Objectiv?.SideListState;
-      if (FolderExplorer && SideListState) {
-        FolderExplorer.setDemoMode?.(true);
-        const dummyRoot = FolderExplorer.getDummyRootPath?.() || '/notes';
-        FolderExplorer.clearCache?.();
-        FolderExplorer.setRootPath?.(dummyRoot);
-        SideListState.setRootPath(dummyRoot);
+      const Repository = window.Objectiv?.Repository;
+
+      // Ensure demo mode is disabled
+      if (FolderExplorer) {
+        FolderExplorer.setDemoMode?.(false);
+      }
+
+      // Check if a vault was previously selected (persisted in localStorage)
+      const hasVault = SideListState?.getRootPath?.();
+
+      if (hasVault) {
+        // Vault already selected - load objectives from it
+        if (Repository) {
+          data = await Repository.initializeData();
+        }
+
+        // Set initial view state based on loaded data
+        if (data.objectives.length > 0) {
+          selectedObjectiveIndex = 0;
+          viewMode = 'objective';
+        } else {
+          selectedObjectiveIndex = -1;
+          viewMode = 'empty';
+        }
+      } else {
+        // No vault selected - show vault-first UI
+        // The SideListState.rebuildItems() will show only "Select your folder"
+        viewMode = 'empty';
+        selectedObjectiveIndex = -1;
       }
 
       updateView();

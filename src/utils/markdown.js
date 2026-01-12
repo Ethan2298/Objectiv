@@ -142,9 +142,19 @@ export function isTextFile(filename) {
   return textExtensions.includes(ext) || !ext;
 }
 
+/**
+ * Check if file is a PDF
+ * @param {string} filename - File name or path
+ * @returns {boolean} True if PDF file
+ */
+export function isPdfFile(filename) {
+  return getFileExtension(filename) === 'pdf';
+}
+
 export default {
   parseMarkdown,
   getFileExtension,
   isMarkdownFile,
-  isTextFile
+  isTextFile,
+  isPdfFile
 };

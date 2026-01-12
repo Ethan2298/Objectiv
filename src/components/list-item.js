@@ -5,7 +5,8 @@
  * Used for objectives, priorities, and steps.
  */
 
-import { calculateClarity } from '../data/repository.js';
+// CLARITY_DISABLED: Import no longer needed - see "Archived code/clarity-badge-scoring.md"
+// import { calculateClarity } from '../data/repository.js';
 
 /**
  * Create a modular list item element
@@ -71,20 +72,13 @@ export function createListItem(options = {}) {
 }
 
 /**
- * Get clarity meta HTML for list items
- * Shows score + badge normally, edit button on hover
+ * CLARITY_DISABLED: Get clarity meta HTML for list items
+ * Now returns only edit button (clarity scoring disabled)
+ * See "Archived code/clarity-badge-scoring.md" for original implementation
  */
 export function getClarityMeta(item, section = 'objectives', index = 0) {
-  const clarity = calculateClarity(item);
-
-  if (item._clarityLoading) {
-    return `<span class="clarity-score">...</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
-  }
-
-  const score = item.clarityScore;
-  const scoreText = (score !== undefined && score !== null) ? `${score}%` : '—';
-
-  return `<span class="clarity-score">${scoreText}</span><span class="clarity-badge">${clarity}</span><span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
+  // CLARITY_DISABLED: Original showed score + badge, now just edit button
+  return `<span class="edit-btn" data-section="${section}" data-index="${index}">edit</span>`;
 }
 
 /**
