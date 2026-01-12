@@ -270,7 +270,7 @@ body.browser-mode #intro {
 }
 
 .side-item:hover {
-  color: var(--text);
+  background: var(--bg-hover);
 }
 
 .side-item.selected {
@@ -332,7 +332,7 @@ body.browser-mode #intro {
 }
 
 .side-item.select-vault:hover {
-  color: #06b6d4;
+  background: var(--bg-hover);
 }
 
 .side-item.select-vault .folder-icon {
@@ -863,7 +863,7 @@ svg.folder-icon {
 }
 
 .side-item.folder-item:hover {
-  color: #e0e0e0;
+  background: var(--bg-hover);
 }
 
 .side-item.folder-item.selected {
@@ -881,7 +881,7 @@ svg.folder-icon {
 }
 
 .side-item.file-item:hover {
-  color: #e0e0e0;
+  background: var(--bg-hover);
 }
 
 .side-item.file-item.selected {
