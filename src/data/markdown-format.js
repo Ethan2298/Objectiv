@@ -32,7 +32,7 @@ export function parseYamlFrontmatter(content) {
 
 /**
  * Simple YAML parser for our specific format
- * Handles: strings, numbers, arrays of objects
+ * Handles: strings, numbers, arrays of objects, nested objects
  */
 function parseSimpleYaml(yaml) {
   const result = {};
@@ -40,6 +40,8 @@ function parseSimpleYaml(yaml) {
   let currentKey = null;
   let currentArray = null;
   let currentArrayItem = null;
+  let currentObject = null; // For nested objects like nextStep
+  let currentObjectKey = null;
 
   for (const line of lines) {
     // Skip empty lines
@@ -53,6 +55,8 @@ function parseSimpleYaml(yaml) {
         result[currentArray].push(currentArrayItem);
       }
       currentArrayItem = {};
+      currentObject = null;
+      currentObjectKey = null;
 
       // Check if there's inline content
       const inlineContent = arrayItemMatch[2].trim();
@@ -64,6 +68,15 @@ function parseSimpleYaml(yaml) {
           currentArrayItem[key] = parseValue(value);
         }
       }
+      continue;
+    }
+
+    // Nested object property (2-space indent, key: value) - for objects like nextStep
+    const nestedObjPropMatch = line.match(/^  (\w+):\s*(.*)$/);
+    if (nestedObjPropMatch && currentObject !== null && currentArray === null) {
+      const key = nestedObjPropMatch[1];
+      const value = nestedObjPropMatch[2].trim();
+      currentObject[key] = parseValue(value);
       continue;
     }
 
@@ -88,13 +101,30 @@ function parseSimpleYaml(yaml) {
       const key = keyValueMatch[1];
       const value = keyValueMatch[2].trim();
 
-      // Check if this is an array start (empty value or next line starts with -)
+      // Check if this is an array or object start (empty value)
       if (value === '') {
-        currentArray = key;
-        result[key] = [];
-        currentArrayItem = null;
+        // Look ahead to determine if it's an array or object
+        const lineIdx = lines.indexOf(line);
+        const nextLine = lines[lineIdx + 1] || '';
+        if (nextLine.trim().startsWith('-')) {
+          // It's an array
+          currentArray = key;
+          result[key] = [];
+          currentArrayItem = null;
+          currentObject = null;
+          currentObjectKey = null;
+        } else {
+          // It's a nested object
+          currentObject = {};
+          currentObjectKey = key;
+          result[key] = currentObject;
+          currentArray = null;
+          currentArrayItem = null;
+        }
       } else {
         currentArray = null;
+        currentObject = null;
+        currentObjectKey = null;
         result[key] = parseValue(value);
       }
       currentKey = key;
@@ -151,6 +181,12 @@ export function stringifyYamlFrontmatter(data) {
         } else {
           lines.push(`  - ${formatValue(item)}`);
         }
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      // Nested object (like nextStep)
+      lines.push(`${key}:`);
+      for (const [subKey, subValue] of Object.entries(value)) {
+        lines.push(`  ${subKey}: ${formatValue(subValue)}`);
       }
     } else {
       lines.push(`${key}: ${formatValue(value)}`);
@@ -279,21 +315,34 @@ export function parseObjectiveMarkdown(content) {
     }
 
     // List item under Steps = Step entry
+    // Parse: - [timestamp] Step name [with optional status/duration suffix]
     const stepMatch = line.match(/^-\s+\[(\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}(?::\d{2})?)?)\]\s*(.+)$/);
     if (stepMatch && currentSection === 'steps') {
       const timestamp = stepMatch[1];
-      const stepName = stepMatch[2].trim();
+      // Strip any status indicators from step name (✓, ⏸, duration suffix)
+      const rawStepName = stepMatch[2].trim();
+      const stepName = rawStepName.replace(/\s*[✓⏸]\s*(\d+[hm]\d*[m]?)?$/, '').replace(/\s*\(\d+[hm]\d*[m]?\)$/, '').trim();
       const stepIndex = steps.length;
 
-      // Get ID from frontmatter
+      // Get metadata from frontmatter
       const frontmatterStep = frontmatter.steps?.[stepIndex] || {};
 
-      steps.push({
+      // Build step with new fields, with backwards compatibility
+      const step = {
         id: frontmatterStep.id || generateId(),
-        name: stepName,
+        name: stepName || rawStepName,
         loggedAt: parseTimestamp(timestamp),
-        orderNumber: stepIndex + 1
-      });
+        orderNumber: stepIndex + 1,
+        // Status: default to 'completed' for legacy steps (logged steps were implicitly done)
+        // Never load as 'active' - convert to 'paused' for safety
+        status: frontmatterStep.status === 'active' ? 'paused' : (frontmatterStep.status || 'completed'),
+        // Elapsed: prefer new field, fall back to old duration field
+        elapsed: frontmatterStep.elapsed ?? frontmatterStep.duration ?? 0,
+        // Timestamps
+        startedAt: frontmatterStep.startedAt || null,
+        completedAt: frontmatterStep.completedAt || null
+      };
+      steps.push(step);
       continue;
     }
 
@@ -315,6 +364,16 @@ export function parseObjectiveMarkdown(content) {
     objectiveDescription = descriptionLines.join('\n').trim();
   }
 
+  // Parse nextStep from frontmatter
+  let nextStep = null;
+  if (frontmatter.nextStep) {
+    nextStep = {
+      text: frontmatter.nextStep.text || '',
+      elapsedSeconds: frontmatter.nextStep.elapsedSeconds || 0,
+      isRunning: false // Always start paused when loading
+    };
+  }
+
   return {
     id: frontmatter.id || generateId(),
     name: objectiveName,
@@ -323,7 +382,8 @@ export function parseObjectiveMarkdown(content) {
     createdAt: frontmatter.createdAt,
     updatedAt: frontmatter.updatedAt,
     priorities,
-    steps
+    steps,
+    nextStep
   };
 }
 
@@ -370,6 +430,14 @@ export function serializeObjective(objective) {
     updatedAt: now
   };
 
+  // Add nextStep if present
+  if (objective.nextStep && (objective.nextStep.text || objective.nextStep.elapsedSeconds > 0)) {
+    frontmatterData.nextStep = {
+      text: objective.nextStep.text || '',
+      elapsedSeconds: objective.nextStep.elapsedSeconds || 0
+    };
+  }
+
   // Add priorities metadata
   if (objective.priorities && objective.priorities.length > 0) {
     frontmatterData.priorities = objective.priorities.map(p => ({
@@ -380,10 +448,32 @@ export function serializeObjective(objective) {
 
   // Add steps metadata
   if (objective.steps && objective.steps.length > 0) {
-    frontmatterData.steps = objective.steps.map(s => ({
-      id: s.id,
-      loggedAt: s.loggedAt
-    }));
+    frontmatterData.steps = objective.steps.map(s => {
+      const stepMeta = {
+        id: s.id,
+        loggedAt: s.loggedAt
+      };
+      // Status: never persist 'active' - convert to 'paused' for safety
+      const status = s.status === 'active' ? 'paused' : (s.status || 'pending');
+      if (status && status !== 'pending') {
+        stepMeta.status = status;
+      }
+      // Include elapsed time if present (renamed from duration)
+      if (s.elapsed && s.elapsed > 0) {
+        stepMeta.elapsed = s.elapsed;
+      } else if (s.duration && s.duration > 0) {
+        // Backwards compat: migrate old duration field
+        stepMeta.elapsed = s.duration;
+      }
+      // Include timestamps if present
+      if (s.startedAt) {
+        stepMeta.startedAt = s.startedAt;
+      }
+      if (s.completedAt) {
+        stepMeta.completedAt = s.completedAt;
+      }
+      return stepMeta;
+    });
   }
 
   // Build markdown body
@@ -420,7 +510,22 @@ export function serializeObjective(objective) {
 
     for (const step of objective.steps) {
       const timestamp = formatTimestamp(step.loggedAt);
-      bodyLines.push(`- [${timestamp}] ${step.name || 'Step'}`);
+      const name = step.name || 'Step';
+
+      // Build status indicator and duration suffix
+      let suffix = '';
+      const elapsed = step.elapsed || step.duration || 0;
+      const status = step.status || 'completed';
+
+      if (status === 'completed') {
+        suffix = elapsed > 0 ? ` ✓ ${formatDuration(elapsed)}` : ' ✓';
+      } else if (status === 'paused') {
+        suffix = elapsed > 0 ? ` ⏸ ${formatDuration(elapsed)}` : ' ⏸';
+      } else if (status === 'pending' && elapsed > 0) {
+        suffix = ` (${formatDuration(elapsed)})`;
+      }
+
+      bodyLines.push(`- [${timestamp}] ${name}${suffix}`);
     }
     bodyLines.push('');
   }
@@ -448,6 +553,28 @@ function formatTimestamp(isoString) {
     return `${year}-${month}-${day} ${hours}:${minutes}`;
   } catch {
     return isoString.slice(0, 16).replace('T', ' ');
+  }
+}
+
+/**
+ * Format elapsed seconds as human-readable duration
+ * Examples: 45 -> "45s", 90 -> "1m", 3600 -> "1h", 5400 -> "1h30m"
+ */
+function formatDuration(seconds) {
+  if (!seconds || seconds <= 0) return '';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h${minutes}m`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else if (minutes > 0) {
+    return `${minutes}m`;
+  } else {
+    return `${secs}s`;
   }
 }
 

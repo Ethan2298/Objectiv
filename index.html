@@ -1381,7 +1381,7 @@
       updateNextStepPlayButton(obj);
 
       // Save to file
-      saveCurrentObjective();
+      saveData();
     }
 
     // Update timer display without re-rendering
@@ -1440,7 +1440,7 @@
       obj.nextStep = { text: '', elapsedSeconds: 0, isRunning: false };
 
       // Save and re-render
-      saveCurrentObjective();
+      saveData();
       renderContentView();
     }
 
@@ -1454,7 +1454,7 @@
       }
 
       obj.nextStep.text = text;
-      saveCurrentObjective();
+      saveData();
     }
 
     // Auto-pause timer when switching objectives or closing app

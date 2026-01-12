@@ -284,14 +284,20 @@ export function createPriority(name = '', description = '') {
 }
 
 /**
- * Create a new step
+ * Create a new step with timer tracking fields
+ * Status lifecycle: pending → active → paused → completed
+ * Note: 'active' is runtime-only, never persisted to disk
  */
 export function createStep(name = '', orderNumber = 1) {
   return {
     id: generateId(),
     name,
     loggedAt: new Date().toISOString(),
-    orderNumber
+    orderNumber,
+    status: 'pending',      // pending|active|paused|completed
+    elapsed: 0,             // accumulated seconds across pause/resume
+    startedAt: null,        // first time timer started
+    completedAt: null       // when marked complete
   };
 }
 
