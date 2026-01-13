@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Objectiv.go</title>
+  <title>Objectiv</title>
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- PDF libraries for real PDF rendering -->
@@ -44,7 +44,6 @@
       <!-- Side List (1/3) -->
       <div id="side-list">
         <div id="resize-handle"></div>
-        <div id="side-list-indicator">●</div>
         <div id="side-list-items"></div>
       </div>
 
@@ -283,6 +282,30 @@
     let selectedFilePath = null;     // Currently selected file for note viewing
     let selectedFileContent = null;  // Cached content of selected file
 
+    // File content cache (LRU-style, max 50 files)
+    const fileCache = new Map();
+    const FILE_CACHE_MAX = 50;
+
+    function getCachedFile(path) {
+      if (fileCache.has(path)) {
+        // Move to end (most recently used)
+        const content = fileCache.get(path);
+        fileCache.delete(path);
+        fileCache.set(path, content);
+        return content;
+      }
+      return null;
+    }
+
+    function setCachedFile(path, content) {
+      // Evict oldest if at capacity
+      if (fileCache.size >= FILE_CACHE_MAX) {
+        const oldest = fileCache.keys().next().value;
+        fileCache.delete(oldest);
+      }
+      fileCache.set(path, content);
+    }
+
     // View mode: 'objective' or 'file'
     let viewMode = 'objective';
 
@@ -297,6 +320,11 @@
     let promptTargetIndex = -1;
     let promptTargetSection = null;
     let skipBlurHandler = false; // Prevents stale blur handlers when switching edits
+
+    // Scroll-based selection state (for buttery smooth scrolling)
+    let _contentLoadTimeout = null;   // Debounce timer for content loading
+    let _lastLoadedIndex = -1;        // Track last loaded item to avoid redundant loads
+    const CONTENT_LOAD_DEBOUNCE = 150; // ms to wait after scroll stops
 
     // Next Step timer state
     let nextStepTimerInterval = null;
@@ -727,7 +755,7 @@
       document.addEventListener('click', skip);
       document.addEventListener('keydown', handleKey);
 
-      await typeText(introText, 'Objectiv.go', 80, null, () => skipped);
+      await typeText(introText, 'Objectiv', 80, null, () => skipped);
       if (skipped) return;
       await new Promise(r => setTimeout(r, 300));
       if (skipped) return;
@@ -787,6 +815,9 @@
     // Render the unified side list (objectives + folder explorer)
     async function renderSideList() {
       const container = document.getElementById('side-list-items');
+
+      // Reset content load tracking when list is rebuilt (indices may change)
+      _lastLoadedIndex = -1;
 
       const SideListState = window.Objectiv?.SideListState;
       if (!SideListState) {
@@ -946,6 +977,14 @@
       hoverPreviewActive = false;
       hoverPreviewItemData = null;
 
+      // Cancel any pending scroll-based content load - click takes priority
+      if (_contentLoadTimeout) {
+        clearTimeout(_contentLoadTimeout);
+        _contentLoadTimeout = null;
+      }
+      // Reset last loaded so this click's content will load
+      _lastLoadedIndex = -1;
+
       // Update selection
       SideListState.setSelectedIndex(idx);
       playNotch();
@@ -1093,11 +1132,9 @@
       }
 
       // Set the new root path (this triggers Objectives folder creation via markdown-storage)
+      // State is managed solely by SideListState
       if (SideListState) {
         SideListState.setRootPath(folderPath);
-      }
-      if (FolderExplorer) {
-        FolderExplorer.setRootPath?.(folderPath);
       }
 
       // Reload objectives from the new vault
@@ -1167,8 +1204,35 @@
       renderContentView();
     }
 
+    // Debounced file selection - waits for scroll to settle
+    let _selectFileTimeout = null;
+    const SELECT_FILE_DEBOUNCE = 50; // ms to wait before loading
+
     // Select file by path (for note viewing)
-    async function selectFile(filePath, fileName) {
+    function selectFile(filePath, fileName) {
+      // Cancel any pending selection
+      if (_selectFileTimeout) {
+        clearTimeout(_selectFileTimeout);
+      }
+
+      // Debounce: wait for user to stop scrolling
+      _selectFileTimeout = setTimeout(() => {
+        _selectFileActual(filePath, fileName);
+      }, SELECT_FILE_DEBOUNCE);
+    }
+
+    // Actual file selection (called after debounce)
+    async function _selectFileActual(filePath, fileName) {
+      // Check cache first (instant load for previously viewed files)
+      const cached = getCachedFile(filePath);
+      if (cached) {
+        selectedFilePath = filePath;
+        selectedFileContent = cached;
+        viewMode = 'file';
+        renderContentView();
+        return;
+      }
+
       // Use FolderExplorer module for reading (handles both Electron and browser mode)
       const FolderExplorer = window.Objectiv?.FolderExplorer;
       if (!FolderExplorer?.readFile) {
@@ -1176,12 +1240,15 @@
         return;
       }
 
-      // Read the file content
+      // Read the file content from disk
       const result = await FolderExplorer.readFile(filePath);
       if (!result.success) {
         showMessage(`Error: ${result.error}`);
         return;
       }
+
+      // Cache the content for fast re-access
+      setCachedFile(filePath, result.content);
 
       // Update state
       selectedFilePath = filePath;
@@ -1231,19 +1298,28 @@
         renderContentNextStep(body, obj);
         renderContentSteps(body, obj);
       } else if (itemData.type === ItemType.FILE) {
-        // Preview file content
-        const FolderExplorer = window.Objectiv?.FolderExplorer;
-        if (!FolderExplorer?.readFile) return;
+        // Preview file content - check cache first
+        let content = getCachedFile(itemData.path);
 
-        const result = await FolderExplorer.readFile(itemData.path);
-        if (!result.success || !hoverPreviewActive) return;
+        if (!content) {
+          const FolderExplorer = window.Objectiv?.FolderExplorer;
+          if (!FolderExplorer?.readFile) return;
+
+          const result = await FolderExplorer.readFile(itemData.path);
+          if (!result.success || !hoverPreviewActive) return;
+
+          content = result.content;
+          setCachedFile(itemData.path, content);
+        }
+
+        if (!hoverPreviewActive) return;
 
         // Store temporarily for renderFileView
         const savedPath = selectedFilePath;
         const savedContent = selectedFileContent;
 
         selectedFilePath = itemData.path;
-        selectedFileContent = result.content;
+        selectedFileContent = content;
         renderFileView();
 
         // Restore (these will be used when hover ends)
@@ -1278,6 +1354,7 @@
 
       if (Markdown?.isPdfFile && Markdown.isPdfFile(fileName)) {
         // PDF file - render real PDF with floating pages
+        document.getElementById('content-page').classList.remove('image-mode');
         headerTitle.textContent = fileName;
         headerDesc.textContent = '';
 
@@ -1292,6 +1369,64 @@
         }
         return;
       }
+
+      // Check if it's an image file
+      if (Markdown?.isImageFile && Markdown.isImageFile(fileName)) {
+        // Enable expanded image mode
+        const contentPage = document.getElementById('content-page');
+        contentPage.classList.add('image-mode');
+
+        headerTitle.textContent = fileName;
+        headerDesc.textContent = '';
+
+        // Build image source - could be base64 data or a path/URL
+        let imgSrc;
+        if (typeof content === 'object' && content.isImage && content.base64) {
+          // From Electron with base64 data
+          imgSrc = `data:${content.mimeType || 'image/png'};base64,${content.base64}`;
+        } else if (typeof selectedFileContent === 'string' && selectedFileContent.length > 100) {
+          // Assume it's already base64 data from IPC
+          const mimeType = Markdown.getImageMimeType(fileName);
+          imgSrc = `data:${mimeType};base64,${selectedFileContent}`;
+        } else if (typeof content === 'object' && content.url) {
+          // Demo mode with URL
+          imgSrc = content.url;
+        } else {
+          // Fallback - try using file path directly (works in Electron)
+          imgSrc = selectedFilePath;
+        }
+
+        // Cancel any pending image load by incrementing request ID
+        window._imageLoadId = (window._imageLoadId || 0) + 1;
+        const thisLoadId = window._imageLoadId;
+
+        // Show blurry placeholder immediately, sharpen when loaded
+        body.innerHTML = `
+          <div class="image-viewer">
+            <img src="${imgSrc}" alt="${fileName}" class="content-image loading" decoding="async" loading="eager" />
+          </div>
+        `;
+
+        // Get the image element we just created
+        const imgEl = body.querySelector('.content-image');
+        if (imgEl) {
+          // When image is fully decoded, remove blur
+          imgEl.decode().then(() => {
+            if (window._imageLoadId === thisLoadId && imgEl.classList.contains('loading')) {
+              imgEl.classList.remove('loading');
+            }
+          }).catch(() => {
+            // Fallback: just remove loading class on error
+            if (window._imageLoadId === thisLoadId) {
+              imgEl.classList.remove('loading');
+            }
+          });
+        }
+        return;
+      }
+
+      // Not an image - remove image mode
+      document.getElementById('content-page').classList.remove('image-mode');
 
       // Non-PDF: proceed with text/markdown rendering
       const contentStr = (typeof content === 'string') ? content : '';
@@ -1333,6 +1468,9 @@
 
     // Render objective view (original content view)
     function renderObjectiveView() {
+      // Remove image mode
+      document.getElementById('content-page').classList.remove('image-mode');
+
       const headerTitle = document.getElementById('content-header-title');
       const headerDesc = document.getElementById('content-header-description');
       const body = document.getElementById('content-body');
@@ -2078,12 +2216,16 @@
     }
 
     // ========================================
-    // SCROLL-BASED SELECTION
-    // Items scroll naturally with snap, selection follows scroll position
+    // SCROLL-BASED SELECTION - BUTTERY SMOOTH
+    // Visual feedback is instant, content loading is deferred
+    // Variables declared at top: _contentLoadTimeout, _lastLoadedIndex, CONTENT_LOAD_DEBOUNCE
     // ========================================
 
-    // Detect which item is at the snap line and update selection
-    function updateSelectionFromScroll() {
+    /**
+     * Update visual selection only - NO content loading
+     * This runs on every scroll frame but is very lightweight
+     */
+    function updateVisualSelection() {
       const container = document.getElementById('side-list-items');
       if (!container) return;
 
@@ -2097,74 +2239,101 @@
       const containerRect = container.getBoundingClientRect();
       const snapLineY = containerRect.top + (window.innerHeight * 0.30);
 
-      // Find the next item at/below the snap line (the one coming into view)
+      // Find the item at the snap line
       let selectedIndex = 0;
 
-      // If at top of scroll, select first item
       if (container.scrollTop <= 5) {
         selectedIndex = 0;
       } else {
         for (let idx = 0; idx < items.length; idx++) {
           const itemRect = items[idx].getBoundingClientRect();
-
-          // Select the first item whose top is at or below the snap line
           if (itemRect.top >= snapLineY - 5) {
             selectedIndex = idx;
             break;
           }
-          // If we pass the snap line, keep this as fallback
           selectedIndex = idx;
         }
       }
 
+      // Only update if selection changed
       if (selectedIndex !== SideListState.getSelectedIndex()) {
-        // Update state
         SideListState.setSelectedIndex(selectedIndex);
         playNotch();
 
-        // Update visual selection
+        // INSTANT: Update visual selection (CSS class toggle only)
         items.forEach((item, idx) => {
           item.classList.toggle('selected', idx === selectedIndex);
         });
 
-        // Update content view based on selected item
-        const selectedItem = SideListState.getSelectedItem();
-        if (selectedItem) {
-          if (selectedItem.type === SideListState.ItemType.OBJECTIVE) {
-            selectedObjectiveIndex = selectedItem.index;
-            viewMode = 'objective';
-            selectedFilePath = null;
-            renderContentView();
-          } else if (selectedItem.type === SideListState.ItemType.FILE) {
-            selectFile(selectedItem.path, selectedItem.name);
-          }
-        }
+        // DEFERRED: Schedule content loading after scroll settles
+        scheduleContentLoad(selectedIndex);
       }
     }
 
-    // Listen for scroll - update selection live as user scrolls
+    /**
+     * Schedule content loading - debounced to run after scroll stops
+     */
+    function scheduleContentLoad(index) {
+      // Cancel any pending load
+      if (_contentLoadTimeout) {
+        clearTimeout(_contentLoadTimeout);
+      }
+
+      // Schedule new load after scroll settles
+      _contentLoadTimeout = setTimeout(() => {
+        loadContentForIndex(index);
+      }, CONTENT_LOAD_DEBOUNCE);
+    }
+
+    /**
+     * Actually load content for the selected index
+     * Only runs when scroll has stopped
+     */
+    function loadContentForIndex(index) {
+      // Skip if we already loaded this item
+      if (index === _lastLoadedIndex) return;
+      _lastLoadedIndex = index;
+
+      const SideListState = window.Objectiv?.SideListState;
+      if (!SideListState) return;
+
+      const selectedItem = SideListState.getSelectedItem();
+      if (!selectedItem) return;
+
+      if (selectedItem.type === SideListState.ItemType.OBJECTIVE) {
+        selectedObjectiveIndex = selectedItem.index;
+        viewMode = 'objective';
+        selectedFilePath = null;
+        renderContentView();
+      } else if (selectedItem.type === SideListState.ItemType.FILE) {
+        // selectFile already has its own debounce, call directly
+        _selectFileActual(selectedItem.path, selectedItem.name);
+      }
+    }
+
+    // Listen for scroll - visual updates only, content deferred
     const sideListItems = document.getElementById('side-list-items');
     if (sideListItems) {
-      sideListItems.addEventListener('scroll', updateSelectionFromScroll, { passive: true });
+      sideListItems.addEventListener('scroll', updateVisualSelection, { passive: true });
     }
 
     // ========================================
-    // WHEEL EVENT - VELOCITY-BASED SMOOTH SCROLLING
-    // Slow = precise one item, Fast = accelerated multi-item
+    // WHEEL HANDLER - Velocity-based sensitivity (like game aim sensitivity)
+    // Slow = precise one-by-one, Fast = accelerated scrolling
     // ========================================
-    let wheelDelta = 0;
-    let lastWheelTime = 0;
-    let velocity = 0;
+    let _wheelDelta = 0;
+    let _lastWheelTime = 0;
+    let _wheelVelocity = 0;
 
-    // Tuning parameters
-    const BASE_THRESHOLD = 80;      // Base pixels needed for slow scroll
-    const MIN_THRESHOLD = 20;       // Minimum threshold at max speed
-    const VELOCITY_DECAY = 0.85;    // How fast velocity decays
-    const VELOCITY_SCALE = 0.3;     // How much each scroll adds to velocity
+    // Tuning parameters (adjust these for feel)
+    const WHEEL_BASE_THRESHOLD = 80;    // Threshold for slow/deliberate scrolling
+    const WHEEL_MIN_THRESHOLD = 15;     // Threshold at max velocity (fast flicks)
+    const WHEEL_VELOCITY_DECAY = 0.85;  // How fast velocity decays between events
+    const WHEEL_VELOCITY_SCALE = 0.4;   // How much each scroll adds to velocity
 
     if (sideListItems) {
       sideListItems.addEventListener('wheel', (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Take control of scrolling
 
         const SideListState = window.Objectiv?.SideListState;
         if (!SideListState) return;
@@ -2172,67 +2341,45 @@
         const items = sideListItems.querySelectorAll('.side-item');
         if (!items.length) return;
 
+        // Track velocity based on time between events
         const now = performance.now();
-        const timeDelta = now - lastWheelTime;
-        lastWheelTime = now;
+        const timeDelta = now - _lastWheelTime;
+        _lastWheelTime = now;
 
         // Decay velocity over time, then add new input
-        if (timeDelta > 200) {
-          velocity = 0; // Reset if pause in scrolling
+        if (timeDelta > 150) {
+          _wheelVelocity = 0; // Reset if pause in scrolling
         } else {
-          velocity *= VELOCITY_DECAY;
+          _wheelVelocity *= WHEEL_VELOCITY_DECAY;
         }
-        velocity += Math.abs(e.deltaY) * VELOCITY_SCALE;
+        _wheelVelocity += Math.abs(e.deltaY) * WHEEL_VELOCITY_SCALE;
 
-        // Calculate dynamic threshold based on velocity
-        // Higher velocity = lower threshold = faster scrolling
-        const velocityFactor = Math.min(velocity / 100, 1); // 0 to 1
-        const threshold = BASE_THRESHOLD - (BASE_THRESHOLD - MIN_THRESHOLD) * velocityFactor;
+        // Dynamic threshold: higher velocity = lower threshold = faster scrolling
+        const velocityFactor = Math.min(_wheelVelocity / 80, 1); // 0 to 1
+        const threshold = WHEEL_BASE_THRESHOLD - (WHEEL_BASE_THRESHOLD - WHEEL_MIN_THRESHOLD) * velocityFactor;
 
-        // Accumulate delta
-        wheelDelta += e.deltaY;
+        // Accumulate wheel delta
+        _wheelDelta += e.deltaY;
 
-        // Check if we've scrolled enough to change selection
-        if (Math.abs(wheelDelta) >= threshold) {
-          const direction = wheelDelta > 0 ? 1 : -1;
-          wheelDelta = 0; // Reset accumulator
+        // Check if we've scrolled enough to move
+        if (Math.abs(_wheelDelta) >= threshold) {
+          const direction = _wheelDelta > 0 ? 1 : -1;
+          _wheelDelta = 0; // Reset accumulator
 
           const currentIdx = SideListState.getSelectedIndex();
           const newIdx = Math.max(0, Math.min(currentIdx + direction, items.length - 1));
 
           if (newIdx !== currentIdx && items[newIdx]) {
-            // Update selection
-            SideListState.setSelectedIndex(newIdx);
-            playNotch();
-            items.forEach((item, idx) => {
-              item.classList.toggle('selected', idx === newIdx);
+            // Use scrollIntoView - lets browser handle scroll-snap properly
+            // 'auto' behavior for fast scrolling, 'smooth' for slow
+            const scrollBehavior = _wheelVelocity > 40 ? 'auto' : 'smooth';
+
+            items[newIdx].scrollIntoView({
+              block: 'start',
+              behavior: scrollBehavior
             });
-
-            // Scroll the item to the 30vh snap line (not to top of container)
-            const scrollBehavior = velocity > 50 ? 'auto' : 'smooth';
-            const snapOffset = window.innerHeight * 0.30;
-
-            if (newIdx === 0) {
-              sideListItems.scrollTo({ top: 0, behavior: scrollBehavior });
-            } else {
-              // Calculate scroll position to put item at snap line
-              const itemTop = items[newIdx].offsetTop;
-              const targetScroll = itemTop - snapOffset + sideListItems.offsetTop;
-              sideListItems.scrollTo({ top: targetScroll, behavior: scrollBehavior });
-            }
-
-            // Update content view
-            const selectedItem = SideListState.getSelectedItem();
-            if (selectedItem) {
-              if (selectedItem.type === SideListState.ItemType.OBJECTIVE) {
-                selectedObjectiveIndex = selectedItem.index;
-                viewMode = 'objective';
-                selectedFilePath = null;
-                renderContentView();
-              } else if (selectedItem.type === SideListState.ItemType.FILE) {
-                selectFile(selectedItem.path, selectedItem.name);
-              }
-            }
+            // updateVisualSelection() fires from scroll event
+            // scheduleContentLoad() defers content loading
           }
         }
       }, { passive: false });
