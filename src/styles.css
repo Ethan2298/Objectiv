@@ -311,7 +311,12 @@ body.browser-mode #intro {
 }
 
 .side-item.selected {
-  font-weight: 500;
+  font-weight: 700;
+  color: #fff;
+}
+
+body.light-mode .side-item.selected {
+  color: #000;
 }
 
 .side-item.editing {
@@ -935,6 +940,16 @@ svg.folder-icon {
   background: var(--bg-hover);
 }
 
+.side-item.folder-item.selected,
+.side-item.file-item.selected {
+  color: #fff;
+}
+
+body.light-mode .side-item.folder-item.selected,
+body.light-mode .side-item.file-item.selected {
+  color: #000;
+}
+
 .file-icon {
   width: 16px;
   margin-right: 4px;
@@ -1261,4 +1276,222 @@ del {
   text-align: center;
   padding: 60px 20px;
   font-size: 14px;
+}
+
+/* ========================================
+   EXCEL VIEWER
+   ======================================== */
+
+/* Expanded content-page mode for Excel - full width */
+#content-page.excel-mode {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 16px 24px 24px 24px;
+}
+
+#content-page.excel-mode #content-header {
+  margin: 0 0 12px 0;
+}
+
+#content-page.excel-mode #content-header-title {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+#content-page.excel-mode #content-body {
+  width: 100%;
+}
+
+/* Container */
+.excel-container {
+  width: 100%;
+  min-height: 400px;
+  background: transparent;
+}
+
+.excel-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 400px;
+}
+
+/* Sheet tabs */
+.excel-sheet-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.excel-sheet-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.excel-sheet-tab {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.excel-sheet-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.excel-sheet-tab.active {
+  background: var(--bg);
+  color: var(--text);
+  border-bottom: 1px solid var(--bg);
+  margin-bottom: -1px;
+}
+
+/* Table container with scroll */
+.excel-table-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-subtle);
+  border-radius: 4px;
+  margin: 8px 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.excel-table-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Excel table */
+.excel-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 100%;
+  background: var(--bg-subtle);
+}
+
+.excel-table th,
+.excel-table td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Row and column headers */
+.excel-row-header,
+.excel-col-header {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: center;
+  position: sticky;
+  z-index: 1;
+}
+
+.excel-row-header {
+  left: 0;
+  min-width: 40px;
+  font-size: 11px;
+}
+
+.excel-col-header {
+  top: 0;
+  min-width: 60px;
+  font-size: 11px;
+}
+
+/* Corner cell */
+.excel-table thead tr th:first-child {
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-hover);
+}
+
+/* Data cells */
+.excel-table tbody td {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+.excel-table tbody tr:hover td {
+  background: var(--bg-hover);
+}
+
+/* Info bar */
+.excel-info-bar {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  text-align: right;
+}
+
+/* Loading state */
+.excel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Error state */
+.excel-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  margin: 20px 0;
+  font-size: 14px;
+}
+
+/* Empty sheet */
+.excel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Light mode adjustments */
+body.light-mode .excel-table th,
+body.light-mode .excel-table td {
+  border-color: #ddd;
+}
+
+body.light-mode .excel-row-header,
+body.light-mode .excel-col-header,
+body.light-mode .excel-table thead tr th:first-child {
+  background: #f0f0f0;
+}
+
+body.light-mode .excel-table tbody td {
+  background: #fff;
+}
+
+body.light-mode .excel-table tbody tr:hover td {
+  background: #f8f8f8;
 }
