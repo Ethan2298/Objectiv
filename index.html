@@ -53,6 +53,15 @@
 
       <!-- Content View (2/3) -->
       <div id="content-view">
+        <!-- Mobile Header with Back Button -->
+        <div class="mobile-header">
+          <button class="mobile-back-btn" id="btn-mobile-back" aria-label="Back to objectives">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </button>
+        </div>
         <div id="content-page">
           <div id="content-header">
             <div id="content-header-title">Select an objective</div>
@@ -299,6 +308,69 @@
         }
       });
     })();
+
+    // ========================================
+    // MOBILE RESPONSIVE NAVIGATION
+    // ========================================
+    const MOBILE_BREAKPOINT = 768;
+    let isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+
+    // Initialize mobile view state
+    function initMobileState() {
+      isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      const app = document.getElementById('app');
+
+      if (isMobile) {
+        app.classList.add('mobile-list-view');
+        app.classList.remove('mobile-detail-view', 'sidebar-collapsed');
+      } else {
+        app.classList.remove('mobile-list-view', 'mobile-detail-view');
+      }
+    }
+
+    // Switch between list/detail views on mobile
+    function setMobileView(mode) {
+      if (!isMobile) return;
+      const app = document.getElementById('app');
+
+      app.classList.add('transitioning');
+      setTimeout(() => app.classList.remove('transitioning'), 250);
+
+      if (mode === 'detail') {
+        app.classList.remove('mobile-list-view');
+        app.classList.add('mobile-detail-view');
+      } else {
+        app.classList.remove('mobile-detail-view');
+        app.classList.add('mobile-list-view');
+      }
+    }
+
+    // Smart resize handler
+    window.addEventListener('resize', () => {
+      const wasMobile = isMobile;
+      isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+
+      if (isMobile && !wasMobile) {
+        // Desktop → Mobile: show detail if objective selected, else list
+        const app = document.getElementById('app');
+        app.classList.remove('sidebar-collapsed');
+        if (typeof data !== 'undefined' && data.objectives && data.objectives.length > 0 && typeof selectedObjectiveIndex !== 'undefined' && selectedObjectiveIndex >= 0) {
+          setMobileView('detail');
+        } else {
+          setMobileView('list');
+        }
+      } else if (!isMobile && wasMobile) {
+        // Mobile → Desktop: restore split-pane
+        const app = document.getElementById('app');
+        app.classList.remove('mobile-list-view', 'mobile-detail-view');
+      }
+    });
+
+    // Back button handler
+    document.getElementById('btn-mobile-back')?.addEventListener('click', () => setMobileView('list'));
+
+    // Initialize mobile state on load
+    initMobileState();
   </script>
 
   <script>
@@ -961,6 +1033,8 @@
             viewMode = 'objective';
             renderContentView();
             updateSideListSelection();
+            // Navigate to detail view on mobile
+            if (isMobile) setMobileView('detail');
             break;
 
           case ItemType.ADD_OBJECTIVE:
@@ -1122,7 +1196,10 @@
         return;
       }
 
-      // Clamp index
+      // Clamp index to valid range
+      if (selectedObjectiveIndex < 0) {
+        selectedObjectiveIndex = 0;
+      }
       if (selectedObjectiveIndex >= data.objectives.length) {
         selectedObjectiveIndex = data.objectives.length - 1;
       }
