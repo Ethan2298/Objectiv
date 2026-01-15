@@ -122,8 +122,8 @@
       const pinInput = document.getElementById('pin-input');
       const pinError = document.getElementById('pin-error');
 
-      // Check if already authenticated this session
-      if (sessionStorage.getItem(PIN_AUTH_KEY) === 'true') {
+      // Check if already authenticated (persists in browser cache)
+      if (localStorage.getItem(PIN_AUTH_KEY) === 'true') {
         pinModal.style.display = 'none';
         return;
       }
@@ -137,7 +137,7 @@
         pinError.style.display = 'none';
         if (pinInput.value.length === 4) {
           if (pinInput.value === APP_PIN) {
-            sessionStorage.setItem(PIN_AUTH_KEY, 'true');
+            localStorage.setItem(PIN_AUTH_KEY, 'true');
             pinModal.style.display = 'none';
           } else {
             pinError.style.display = 'block';
@@ -151,7 +151,7 @@
       pinInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && pinInput.value.length === 4) {
           if (pinInput.value === APP_PIN) {
-            sessionStorage.setItem(PIN_AUTH_KEY, 'true');
+            localStorage.setItem(PIN_AUTH_KEY, 'true');
             pinModal.style.display = 'none';
           } else {
             pinError.style.display = 'block';
