@@ -1,8 +1,8 @@
 /**
  * Side List State Module
  *
- * Unified state management for the side list navigation.
- * Treats objectives and folder explorer as one continuous navigable list.
+ * State management for the side list navigation.
+ * Manages objectives list only.
  */
 
 // ========================================
@@ -14,14 +14,7 @@ const state = {
   selectedIndex: 0,
 
   // Cached flat list of navigable items
-  items: [],
-
-  // Folder explorer specific state
-  folderExplorer: {
-    rootPath: null,
-    expanded: new Set(),
-    collapsed: false  // Whether FILES section is collapsed
-  }
+  items: []
 };
 
 // ========================================
@@ -29,13 +22,8 @@ const state = {
 // ========================================
 
 export const ItemType = {
-  SELECT_VAULT: 'select-vault',  // Initial state - no vault selected
   OBJECTIVE: 'objective',
-  ADD_OBJECTIVE: 'add-objective',
-  FILES_HEADER: 'files-header',
-  SET_FOLDER: 'set-folder',
-  FOLDER: 'folder',
-  FILE: 'file'
+  ADD_OBJECTIVE: 'add-objective'
 };
 
 // ========================================
@@ -54,18 +42,6 @@ export function getSelectedItem() {
   return state.items[state.selectedIndex] || null;
 }
 
-export function getRootPath() {
-  return state.folderExplorer.rootPath;
-}
-
-export function isExpanded(path) {
-  return state.folderExplorer.expanded.has(path);
-}
-
-export function isFolderSectionCollapsed() {
-  return state.folderExplorer.collapsed;
-}
-
 // ========================================
 // Actions - Selection
 // ========================================
@@ -76,17 +52,8 @@ export function setSelectedIndex(index) {
   }
 }
 
-// Items that can be navigated to (skips headers)
-function isNavigable(item) {
-  return item && item.type !== ItemType.FILES_HEADER;
-}
-
 export function selectNext() {
-  let newIndex = state.selectedIndex + 1;
-  // Skip non-navigable items
-  while (newIndex < state.items.length && !isNavigable(state.items[newIndex])) {
-    newIndex++;
-  }
+  const newIndex = state.selectedIndex + 1;
   if (newIndex < state.items.length) {
     state.selectedIndex = newIndex;
     return true;
@@ -95,11 +62,7 @@ export function selectNext() {
 }
 
 export function selectPrev() {
-  let newIndex = state.selectedIndex - 1;
-  // Skip non-navigable items
-  while (newIndex >= 0 && !isNavigable(state.items[newIndex])) {
-    newIndex--;
-  }
+  const newIndex = state.selectedIndex - 1;
   if (newIndex >= 0) {
     state.selectedIndex = newIndex;
     return true;
@@ -114,8 +77,7 @@ export function selectItem(type, identifier) {
   const index = state.items.findIndex(item => {
     if (item.type !== type) return false;
     if (type === ItemType.OBJECTIVE) return item.index === identifier;
-    if (type === ItemType.FOLDER || type === ItemType.FILE) return item.path === identifier;
-    if (type === ItemType.ADD_OBJECTIVE || type === ItemType.FILES_HEADER) return true;
+    if (type === ItemType.ADD_OBJECTIVE) return true;
     return false;
   });
   if (index !== -1) {
@@ -126,62 +88,20 @@ export function selectItem(type, identifier) {
 }
 
 // ========================================
-// Actions - Folder Explorer
-// ========================================
-
-export function setRootPath(path) {
-  state.folderExplorer.rootPath = path;
-  state.folderExplorer.expanded.clear();
-  if (path) {
-    state.folderExplorer.expanded.add(path);
-  }
-  saveState();
-}
-
-export function toggleExpanded(path) {
-  if (state.folderExplorer.expanded.has(path)) {
-    state.folderExplorer.expanded.delete(path);
-  } else {
-    state.folderExplorer.expanded.add(path);
-  }
-  saveState();
-}
-
-export function toggleFolderSection() {
-  state.folderExplorer.collapsed = !state.folderExplorer.collapsed;
-  saveState();
-}
-
-// ========================================
 // Build Navigable Items List
 // ========================================
 
 /**
  * Build the flat list of all navigable items
- * Called whenever objectives or folder structure changes
+ * Called whenever objectives change
  *
  * @param {Object} options
  * @param {Array} options.objectives - Array of objective objects
- * @param {Function} options.getFolderContents - Async function to get folder contents
  * @param {boolean} options.isAddingObjective - Whether currently adding an objective
  */
-export async function rebuildItems({ objectives = [], getFolderContents, isAddingObjective = false }) {
+export function rebuildItems({ objectives = [], isAddingObjective = false }) {
   const items = [];
 
-  // NO VAULT SELECTED STATE
-  // If no root path is set, show only the vault selector
-  if (!state.folderExplorer.rootPath) {
-    items.push({
-      type: ItemType.SELECT_VAULT,
-      name: 'Select your folder'
-    });
-
-    state.items = items;
-    state.selectedIndex = 0;
-    return items;
-  }
-
-  // VAULT SELECTED STATE
   // Add objectives
   objectives.forEach((obj, index) => {
     items.push({
@@ -200,20 +120,6 @@ export async function rebuildItems({ objectives = [], getFolderContents, isAddin
     });
   }
 
-  // Add FILES section header
-  items.push({
-    type: ItemType.FILES_HEADER,
-    name: 'FILES',
-    isCollapsed: state.folderExplorer.collapsed,
-    rootPath: state.folderExplorer.rootPath
-  });
-
-  // Add folder explorer items if not collapsed
-  if (!state.folderExplorer.collapsed) {
-    // Add folder tree items recursively
-    await addFolderItems(items, state.folderExplorer.rootPath, 0, getFolderContents);
-  }
-
   state.items = items;
 
   // Clamp selection index
@@ -222,44 +128,6 @@ export async function rebuildItems({ objectives = [], getFolderContents, isAddin
   }
 
   return items;
-}
-
-/**
- * Recursively add folder items to the list
- */
-async function addFolderItems(items, dirPath, depth, getFolderContents) {
-  if (!getFolderContents) return;
-
-  try {
-    const contents = await getFolderContents(dirPath);
-    if (!contents || !Array.isArray(contents)) return;
-
-    for (const entry of contents) {
-      if (entry.isDirectory) {
-        items.push({
-          type: ItemType.FOLDER,
-          path: entry.path,
-          name: entry.name,
-          depth,
-          isExpanded: state.folderExplorer.expanded.has(entry.path)
-        });
-
-        // If expanded, add children
-        if (state.folderExplorer.expanded.has(entry.path)) {
-          await addFolderItems(items, entry.path, depth + 1, getFolderContents);
-        }
-      } else {
-        items.push({
-          type: ItemType.FILE,
-          path: entry.path,
-          name: entry.name,
-          depth
-        });
-      }
-    }
-  } catch (err) {
-    console.error('Error loading folder contents:', err);
-  }
 }
 
 // ========================================
@@ -271,9 +139,7 @@ const STORAGE_KEY = 'objectiv-sidelist-state';
 export function saveState() {
   try {
     const data = {
-      rootPath: state.folderExplorer.rootPath,
-      expanded: Array.from(state.folderExplorer.expanded),
-      collapsed: state.folderExplorer.collapsed
+      selectedIndex: state.selectedIndex
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -286,9 +152,7 @@ export function loadState() {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const data = JSON.parse(stored);
-      state.folderExplorer.rootPath = data.rootPath || null;
-      state.folderExplorer.expanded = new Set(data.expanded || []);
-      state.folderExplorer.collapsed = data.collapsed || false;
+      state.selectedIndex = data.selectedIndex || 0;
     }
   } catch (e) {
     console.warn('Failed to load side list state:', e);
@@ -314,20 +178,12 @@ export default {
   getSelectedIndex,
   getItems,
   getSelectedItem,
-  getRootPath,
-  isExpanded,
-  isFolderSectionCollapsed,
 
   // Selection
   setSelectedIndex,
   selectNext,
   selectPrev,
   selectItem,
-
-  // Folder explorer
-  setRootPath,
-  toggleExpanded,
-  toggleFolderSection,
 
   // Building
   rebuildItems,

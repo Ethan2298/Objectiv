@@ -1495,3 +1495,54 @@ body.light-mode .excel-table tbody td {
 body.light-mode .excel-table tbody tr:hover td {
   background: #f8f8f8;
 }
+
+/* ========================================
+   Modal Overlays (PIN, Supabase Config)
+   ======================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.modal-content {
+  background: #0f0f0f;
+  padding: 32px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  text-align: center;
+}
+
+body.light-mode .modal-overlay {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+body.light-mode .modal-content {
+  background: #fff;
+  border-color: #ddd;
+}
+
+body.light-mode .modal-content h2 {
+  color: #1a1a1a !important;
+}
+
+body.light-mode .modal-content input {
+  background: #f8f8f8 !important;
+  color: #1a1a1a !important;
+  border-color: #ddd !important;
+}
+
+body.light-mode .modal-content label {
+  color: #666 !important;
+}
+
+body.light-mode .modal-content p {
+  color: #888 !important;
+}

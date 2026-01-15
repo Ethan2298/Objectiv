@@ -1,8 +1,8 @@
 /**
  * Data Repository Module
  *
- * Markdown-based persistence layer.
- * Stores objectives as .md files in the Objectives folder.
+ * Supabase-based persistence layer.
+ * Stores objectives in PostgreSQL database.
  */
 
 import {
@@ -11,7 +11,7 @@ import {
   deleteObjective as deleteObjectiveFile,
   isStorageAvailable,
   getStorageStatus
-} from './markdown-storage.js';
+} from './supabase-storage.js';
 
 // ========================================
 // Configuration

@@ -6,20 +6,22 @@
   <title>Objectiv</title>
   <link rel="stylesheet" href="src/styles.css">
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- PDF libraries for real PDF rendering -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- ExcelJS for Excel file parsing -->
-  <script src="./node_modules/exceljs/dist/exceljs.min.js"></script>
-  <script>
-    // Configure pdf.js worker
-    if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
   <script type="module" src="src/app.js"></script>
 </head>
 <body>
+  <!-- PIN Protection Modal -->
+  <div id="pin-modal" class="modal-overlay">
+    <div class="modal-content">
+      <h2 style="margin: 0 0 16px 0; color: #e0e0e0;">Enter PIN</h2>
+      <input type="password" id="pin-input" placeholder="••••" maxlength="4"
+             style="width: 120px; padding: 12px; font-size: 24px; text-align: center;
+                    background: #1a1a1a; border: 1px solid #333; color: #e0e0e0;
+                    border-radius: 4px; letter-spacing: 8px;"
+             autocomplete="off" />
+      <div id="pin-error" style="color: #ff5555; margin-top: 8px; font-size: 12px; display: none;">Incorrect PIN</div>
+    </div>
+  </div>
+
   <!-- Titlebar -->
   <div id="titlebar">
     <div id="titlebar-title"></div>
@@ -99,6 +101,56 @@
       document.body.classList.add('browser-mode');
     }
 
+    // ========================================
+    // PIN PROTECTION
+    // ========================================
+    const APP_PIN = '2298';
+    const PIN_AUTH_KEY = 'objectiv-authenticated';
+
+    (function initPinProtection() {
+      const pinModal = document.getElementById('pin-modal');
+      const pinInput = document.getElementById('pin-input');
+      const pinError = document.getElementById('pin-error');
+
+      // Check if already authenticated this session
+      if (sessionStorage.getItem(PIN_AUTH_KEY) === 'true') {
+        pinModal.style.display = 'none';
+        return;
+      }
+
+      // Show modal and focus input
+      pinModal.style.display = 'flex';
+      setTimeout(() => pinInput.focus(), 100);
+
+      // Handle PIN input
+      pinInput.addEventListener('input', () => {
+        pinError.style.display = 'none';
+        if (pinInput.value.length === 4) {
+          if (pinInput.value === APP_PIN) {
+            sessionStorage.setItem(PIN_AUTH_KEY, 'true');
+            pinModal.style.display = 'none';
+          } else {
+            pinError.style.display = 'block';
+            pinInput.value = '';
+            pinInput.focus();
+          }
+        }
+      });
+
+      // Handle Enter key
+      pinInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && pinInput.value.length === 4) {
+          if (pinInput.value === APP_PIN) {
+            sessionStorage.setItem(PIN_AUTH_KEY, 'true');
+            pinModal.style.display = 'none';
+          } else {
+            pinError.style.display = 'block';
+            pinInput.value = '';
+          }
+        }
+      });
+    })();
+
     // Theme toggle
     (function() {
       const toggle = document.getElementById('theme-toggle');
@@ -119,18 +171,15 @@
       const container = document.getElementById('status-items');
       if (!container) return;
 
-      // Get markdown storage status
+      // Get Supabase storage status
       const storageStatus = window.Objectiv?.Repository?.getStorageStatus?.() || { isReady: false };
-      const storageLabel = storageStatus.isReady
-        ? 'ready'
-        : (storageStatus.rootPath ? 'no folder' : 'select folder');
+      const storageLabel = storageStatus.isReady ? 'connected' : 'not configured';
       const storageSt = storageStatus.isReady ? 'ok' : 'warn';
 
       const items = [
-        { label: 'Platform', value: systemStatus.platform, status: 'ok' },
-        { label: 'Files', value: storageLabel, status: storageSt },
+        { label: 'Platform', value: 'web', status: 'ok' },
+        { label: 'Supabase', value: storageLabel, status: storageSt },
         { label: 'Taglines', value: systemStatus.taglines ? 'loaded' : 'fallback', status: systemStatus.taglines ? 'ok' : 'warn' }
-        // CLARITY_DISABLED: Removed "Clarity AI" status - see "Archived code/clarity-badge-scoring.md"
       ];
 
       container.innerHTML = items.map(item =>
@@ -257,58 +306,32 @@
     const STORAGE_KEY = 'objectiv-data';
     let data = loadData();
 
-    // Markdown storage initialization (non-blocking)
-    // Runs after modules load, loads objectives from markdown files
-    async function initMarkdownStorage() {
+    // Storage initialization (non-blocking)
+    // Runs after modules load, loads objectives from Supabase
+    async function initStorage() {
       if (!window.Objectiv?.Repository?.initializeData) {
-        console.log('📁 Repository module not loaded yet');
+        console.log('Repository module not loaded yet');
         return;
       }
       try {
         const loadedData = await window.Objectiv.Repository.initializeData();
         if (loadedData && loadedData.objectives) {
-          console.log('📁 Loaded', loadedData.objectives.length, 'objectives from markdown files');
+          console.log('Loaded', loadedData.objectives.length, 'objectives from Supabase');
           data = loadedData;
           if (window.updateView) updateView();
           updateStatusReporter();
         }
       } catch (e) {
-        console.warn('📁 Markdown storage init failed:', e);
+        console.warn('Storage init failed:', e);
       }
     }
     // Run after a short delay to let modules load
-    setTimeout(initMarkdownStorage, 500);
+    setTimeout(initStorage, 500);
 
     // Navigation state (simplified for split-pane)
     let selectedObjectiveIndex = 0;  // Which objective is selected in side list
-    let selectedFilePath = null;     // Currently selected file for note viewing
-    let selectedFileContent = null;  // Cached content of selected file
 
-    // File content cache (LRU-style, max 50 files)
-    const fileCache = new Map();
-    const FILE_CACHE_MAX = 50;
-
-    function getCachedFile(path) {
-      if (fileCache.has(path)) {
-        // Move to end (most recently used)
-        const content = fileCache.get(path);
-        fileCache.delete(path);
-        fileCache.set(path, content);
-        return content;
-      }
-      return null;
-    }
-
-    function setCachedFile(path, content) {
-      // Evict oldest if at capacity
-      if (fileCache.size >= FILE_CACHE_MAX) {
-        const oldest = fileCache.keys().next().value;
-        fileCache.delete(oldest);
-      }
-      fileCache.set(path, content);
-    }
-
-    // View mode: 'objective' or 'file'
+    // View mode: 'objective'
     let viewMode = 'objective';
 
     // Hover preview state
@@ -831,9 +854,8 @@
 
       // Build the unified list of navigable items
       const isAddingObjective = promptMode === 'add' && promptTargetSection === 'objectives';
-      await SideListState.rebuildItems({
+      SideListState.rebuildItems({
         objectives: data.objectives,
-        getFolderContents: getFolderContents,
         isAddingObjective
       });
 
@@ -877,17 +899,6 @@
       const indicator = '<span class="side-item-indicator">●</span>';
 
       switch (itemData.type) {
-        case ItemType.SELECT_VAULT:
-          item.className = 'side-item select-vault' + (isSelected ? ' selected' : '');
-          item.dataset.type = 'select-vault';
-          item.innerHTML = `
-            <i data-lucide="folder-open" class="folder-icon"></i>
-            <span class="side-item-name">Select your folder</span>
-            <span class="side-item-indicator">●</span>
-          `;
-          item.onclick = () => handleSideItemClick(idx, itemData);
-          break;
-
         case ItemType.OBJECTIVE:
           const isEditing = promptMode === 'add' && promptTargetSection === 'objectives' && promptTargetIndex === itemData.index;
           item.dataset.type = 'objective';
@@ -910,56 +921,6 @@
           item.className = 'side-item add-option' + (isSelected ? ' selected' : '');
           item.dataset.type = 'add-objective';
           item.innerHTML = `<span class="side-item-name">+ Add objective</span>${indicator}`;
-          item.onclick = () => handleSideItemClick(idx, itemData);
-          break;
-
-        case ItemType.FILES_HEADER:
-          item.className = 'side-item files-header' + (isSelected ? ' selected' : '');
-          item.dataset.type = 'files-header';
-          item.innerHTML = `
-            <i data-lucide="${itemData.isCollapsed ? 'folder' : 'folder-open'}" class="folder-icon"></i>
-            <span class="side-item-name">FILES</span>${indicator}
-          `;
-          item.onclick = async (e) => {
-            e.stopPropagation();
-            SideListState.toggleFolderSection();
-            await renderSideList();
-          };
-          break;
-
-        case ItemType.SET_FOLDER:
-          item.className = 'side-item add-option' + (isSelected ? ' selected' : '');
-          item.dataset.type = 'set-folder';
-          item.style.paddingLeft = '20px';
-          item.innerHTML = `<span class="side-item-name">+ Set folder</span>${indicator}`;
-          item.onclick = () => handleSideItemClick(idx, itemData);
-          break;
-
-        case ItemType.FOLDER:
-          item.className = 'side-item folder-item' + (isSelected ? ' selected' : '');
-          item.dataset.type = 'folder';
-          item.dataset.path = itemData.path;
-          item.style.paddingLeft = `${20 + itemData.depth * 12}px`;
-          item.innerHTML = `
-            <i data-lucide="${itemData.isExpanded ? 'folder-open' : 'folder'}" class="folder-icon"></i>
-            <span class="side-item-name">${itemData.name}</span>${indicator}
-          `;
-          item.onclick = async (e) => {
-            e.stopPropagation();
-            SideListState.toggleExpanded(itemData.path);
-            await renderSideList();
-          };
-          break;
-
-        case ItemType.FILE:
-          item.className = 'side-item file-item' + (isSelected ? ' selected' : '');
-          item.dataset.type = 'file';
-          item.dataset.path = itemData.path;
-          item.style.paddingLeft = `${20 + itemData.depth * 12}px`;
-          item.innerHTML = `
-            <span class="file-icon">&nbsp;</span>
-            <span class="side-item-name">${itemData.name}</span>${indicator}
-          `;
           item.onclick = () => handleSideItemClick(idx, itemData);
           break;
 
@@ -994,41 +955,16 @@
       // Action to run after scroll completes
       async function executeAction() {
         switch (itemData.type) {
-          case ItemType.SELECT_VAULT:
-            await selectVault();
-            break;
-
           case ItemType.OBJECTIVE:
             commitEditInPlace();
             selectedObjectiveIndex = itemData.index;
             viewMode = 'objective';
-            selectedFilePath = null;
             renderContentView();
             updateSideListSelection();
             break;
 
           case ItemType.ADD_OBJECTIVE:
             startAddObjective();
-            break;
-
-          case ItemType.FILES_HEADER:
-            SideListState.toggleFolderSection();
-            await renderSideList();
-            break;
-
-          case ItemType.SET_FOLDER:
-            await pickFolder();
-            await renderSideList();
-            break;
-
-          case ItemType.FOLDER:
-            SideListState.toggleExpanded(itemData.path);
-            await renderSideList();
-            break;
-
-          case ItemType.FILE:
-            await selectFile(itemData.path, itemData.name);
-            updateSideListSelection();
             break;
         }
       }
@@ -1082,84 +1018,6 @@
       });
     }
 
-    // Get folder contents (cached via FolderExplorer)
-    async function getFolderContents(dirPath) {
-      const FolderExplorer = window.Objectiv?.FolderExplorer;
-      if (!FolderExplorer) return [];
-      return await FolderExplorer.loadDirectory(dirPath);
-    }
-
-    // Pick folder using system dialog
-    async function pickFolder() {
-      if (!window.electronAPI?.folderExplorer) {
-        showMessage('Not available in browser mode');
-        return null;
-      }
-      const folderPath = await window.electronAPI.folderExplorer.pickFolder();
-      if (folderPath) {
-        const SideListState = window.Objectiv?.SideListState;
-        if (SideListState) {
-          SideListState.setRootPath(folderPath);
-        }
-      }
-      return folderPath;
-    }
-
-    // Select vault (main entry point for vault selection)
-    // Opens folder picker, sets root path, creates Objectives folder, loads objectives
-    async function selectVault() {
-      if (!window.electronAPI?.folderExplorer) {
-        showMessage('Folder selection requires the desktop app');
-        return;
-      }
-
-      // Open native folder picker
-      const folderPath = await window.electronAPI.folderExplorer.pickFolder();
-      if (!folderPath) {
-        // User cancelled
-        return;
-      }
-
-      const FolderExplorer = window.Objectiv?.FolderExplorer;
-      const SideListState = window.Objectiv?.SideListState;
-      const Repository = window.Objectiv?.Repository;
-
-      // Clear caches before changing root
-      if (FolderExplorer) {
-        FolderExplorer.clearCache?.();
-        FolderExplorer.setDemoMode?.(false);  // Ensure demo mode is off
-      }
-      if (Repository) {
-        Repository.invalidateCache?.();
-      }
-
-      // Set the new root path (this triggers Objectives folder creation via markdown-storage)
-      // State is managed solely by SideListState
-      if (SideListState) {
-        SideListState.setRootPath(folderPath);
-      }
-
-      // Reload objectives from the new vault
-      if (Repository) {
-        data = await Repository.initializeData();
-      }
-
-      // Reset view state
-      selectedObjectiveIndex = data.objectives.length > 0 ? 0 : -1;
-      viewMode = data.objectives.length > 0 ? 'objective' : 'empty';
-      selectedFilePath = null;
-
-      // Re-render everything
-      updateView();
-    }
-
-    // Get shortened path for display
-    function getShortPath(fullPath) {
-      if (!fullPath) return '';
-      const parts = fullPath.split('/').filter(Boolean);
-      if (parts.length <= 2) return fullPath;
-      return '.../' + parts.slice(-2).join('/');
-    }
 
     // Basic fallback render (when modules not ready)
     function renderSideListBasic(container) {
@@ -1201,72 +1059,12 @@
 
       selectedObjectiveIndex = index;
       viewMode = 'objective';
-      selectedFilePath = null;
       updateSideListSelection();
       renderContentView();
     }
 
-    // Debounced file selection - waits for scroll to settle
-    let _selectFileTimeout = null;
-    const SELECT_FILE_DEBOUNCE = 50; // ms to wait before loading
-
-    // Select file by path (for note viewing)
-    function selectFile(filePath, fileName) {
-      // Cancel any pending selection
-      if (_selectFileTimeout) {
-        clearTimeout(_selectFileTimeout);
-      }
-
-      // Debounce: wait for user to stop scrolling
-      _selectFileTimeout = setTimeout(() => {
-        _selectFileActual(filePath, fileName);
-      }, SELECT_FILE_DEBOUNCE);
-    }
-
-    // Actual file selection (called after debounce)
-    async function _selectFileActual(filePath, fileName) {
-      // Check cache first (instant load for previously viewed files)
-      const cached = getCachedFile(filePath);
-      if (cached) {
-        selectedFilePath = filePath;
-        selectedFileContent = cached;
-        viewMode = 'file';
-        renderContentView();
-        return;
-      }
-
-      // Use FolderExplorer module for reading (handles both Electron and browser mode)
-      const FolderExplorer = window.Objectiv?.FolderExplorer;
-      if (!FolderExplorer?.readFile) {
-        showMessage('File reading not available');
-        return;
-      }
-
-      // Read the file content from disk
-      const result = await FolderExplorer.readFile(filePath);
-      if (!result.success) {
-        showMessage(`Error: ${result.error}`);
-        return;
-      }
-
-      // Cache the content for fast re-access
-      setCachedFile(filePath, result.content);
-
-      // Update state
-      selectedFilePath = filePath;
-      selectedFileContent = result.content;
-      viewMode = 'file';
-
-      // Render the file view
-      renderContentView();
-    }
-
-    // Render the content view (selected objective's details OR file content)
+    // Render the content view (selected objective's details)
     function renderContentView() {
-      if (viewMode === 'file' && selectedFilePath) {
-        renderFileView();
-        return;
-      }
       renderObjectiveView();
     }
 
@@ -1275,59 +1073,29 @@
       const SideListState = window.Objectiv?.SideListState;
       const ItemType = SideListState?.ItemType || {};
 
-      // Only preview objectives and files
-      if (itemData.type !== ItemType.OBJECTIVE && itemData.type !== ItemType.FILE) {
+      // Only preview objectives
+      if (itemData.type !== ItemType.OBJECTIVE) {
         return;
       }
 
       hoverPreviewActive = true;
       hoverPreviewItemData = itemData;
 
-      if (itemData.type === ItemType.OBJECTIVE) {
-        // Preview objective content
-        const obj = data.objectives[itemData.index];
-        if (!obj) return;
+      // Preview objective content
+      const obj = data.objectives[itemData.index];
+      if (!obj) return;
 
-        const headerTitle = document.getElementById('content-header-title');
-        const headerDesc = document.getElementById('content-header-description');
-        const body = document.getElementById('content-body');
+      const headerTitle = document.getElementById('content-header-title');
+      const headerDesc = document.getElementById('content-header-description');
+      const body = document.getElementById('content-body');
 
-        headerTitle.textContent = obj.name;
-        headerDesc.textContent = obj.description || '';
+      headerTitle.textContent = obj.name;
+      headerDesc.textContent = obj.description || '';
 
-        body.innerHTML = '';
-        renderContentPriorities(body, obj);
-        renderContentNextStep(body, obj);
-        renderContentSteps(body, obj);
-      } else if (itemData.type === ItemType.FILE) {
-        // Preview file content - check cache first
-        let content = getCachedFile(itemData.path);
-
-        if (!content) {
-          const FolderExplorer = window.Objectiv?.FolderExplorer;
-          if (!FolderExplorer?.readFile) return;
-
-          const result = await FolderExplorer.readFile(itemData.path);
-          if (!result.success || !hoverPreviewActive) return;
-
-          content = result.content;
-          setCachedFile(itemData.path, content);
-        }
-
-        if (!hoverPreviewActive) return;
-
-        // Store temporarily for renderFileView
-        const savedPath = selectedFilePath;
-        const savedContent = selectedFileContent;
-
-        selectedFilePath = itemData.path;
-        selectedFileContent = content;
-        renderFileView();
-
-        // Restore (these will be used when hover ends)
-        selectedFilePath = savedPath;
-        selectedFileContent = savedContent;
-      }
+      body.innerHTML = '';
+      renderContentPriorities(body, obj);
+      renderContentNextStep(body, obj);
+      renderContentSteps(body, obj);
     }
 
     // End hover preview (restore selected content)
@@ -1341,181 +1109,11 @@
       renderContentView();
     }
 
-    // Render file content as markdown
-    function renderFileView() {
-      const headerTitle = document.getElementById('content-header-title');
-      const headerDesc = document.getElementById('content-header-description');
-      const body = document.getElementById('content-body');
-
-      const fileName = selectedFilePath.split('/').pop();
-      const content = selectedFileContent;
-
-      // Check if it's a PDF file
-      const Markdown = window.Objectiv?.Markdown;
-      const PdfRenderer = window.Objectiv?.PdfRenderer;
-      const ExcelRenderer = window.Objectiv?.ExcelRenderer;
-
-      if (Markdown?.isPdfFile && Markdown.isPdfFile(fileName)) {
-        // PDF file - render real PDF with floating pages
-        const contentPage = document.getElementById('content-page');
-        contentPage.classList.remove('image-mode', 'excel-mode');
-        headerTitle.textContent = fileName;
-        headerDesc.textContent = '';
-
-        // Check if content is PDF metadata (demo mode) - render real PDF
-        if (PdfRenderer?.isPdfMetadata && PdfRenderer.isPdfMetadata(content)) {
-          PdfRenderer.renderPdf(body, content);
-        } else if (PdfRenderer?.renderPdf) {
-          // Real PDF binary data
-          PdfRenderer.renderPdf(body, { title: fileName, pageCount: 1 });
-        } else {
-          body.innerHTML = '<div class="pdf-container"><div class="pdf-error">PDF renderer not available</div></div>';
-        }
-        return;
-      }
-
-      // Check if it's an Excel file
-      if (Markdown?.isExcelFile && Markdown.isExcelFile(fileName)) {
-        const contentPage = document.getElementById('content-page');
-        contentPage.classList.remove('image-mode');
-        contentPage.classList.add('excel-mode');
-        headerTitle.textContent = fileName;
-        headerDesc.textContent = '';
-
-        if (ExcelRenderer?.renderExcel) {
-          // Check file extension for CSV vs Excel binary
-          const ext = fileName.split('.').pop()?.toLowerCase();
-          if (ext === 'csv' && typeof content === 'string') {
-            // CSV is text-based
-            ExcelRenderer.renderCsv(body, content, fileName);
-          } else if (typeof content === 'string' && content.length > 100) {
-            // Excel binary data as base64
-            ExcelRenderer.renderExcel(body, content, fileName);
-          } else {
-            body.innerHTML = '<div class="excel-error">Invalid Excel data</div>';
-          }
-        } else {
-          body.innerHTML = '<div class="excel-error">Excel renderer not available</div>';
-        }
-        return;
-      }
-
-      // Check if it's an image file
-      if (Markdown?.isImageFile && Markdown.isImageFile(fileName)) {
-        // Enable expanded image mode
-        const contentPage = document.getElementById('content-page');
-        contentPage.classList.remove('excel-mode');
-        contentPage.classList.add('image-mode');
-
-        headerTitle.textContent = fileName;
-        headerDesc.textContent = '';
-
-        // Build image source - could be base64 data or a path/URL
-        let imgSrc;
-        if (typeof content === 'object' && content.isImage && content.base64) {
-          // From Electron with base64 data
-          imgSrc = `data:${content.mimeType || 'image/png'};base64,${content.base64}`;
-        } else if (typeof selectedFileContent === 'string' && selectedFileContent.length > 100) {
-          // Assume it's already base64 data from IPC
-          const mimeType = Markdown.getImageMimeType(fileName);
-          imgSrc = `data:${mimeType};base64,${selectedFileContent}`;
-        } else if (typeof content === 'object' && content.url) {
-          // Demo mode with URL
-          imgSrc = content.url;
-        } else {
-          // Fallback - try using file path directly (works in Electron)
-          imgSrc = selectedFilePath;
-        }
-
-        // Cancel any pending image load by incrementing request ID
-        window._imageLoadId = (window._imageLoadId || 0) + 1;
-        const thisLoadId = window._imageLoadId;
-
-        // Show blurry placeholder immediately, sharpen when loaded
-        body.innerHTML = `
-          <div class="image-viewer">
-            <img src="${imgSrc}" alt="${fileName}" class="content-image loading" decoding="async" loading="eager" />
-          </div>
-        `;
-
-        // Get the image element we just created
-        const imgEl = body.querySelector('.content-image');
-        if (imgEl) {
-          // When image is fully decoded, remove blur
-          imgEl.decode().then(() => {
-            if (window._imageLoadId === thisLoadId && imgEl.classList.contains('loading')) {
-              imgEl.classList.remove('loading');
-            }
-          }).catch(() => {
-            // Fallback: just remove loading class on error
-            if (window._imageLoadId === thisLoadId) {
-              imgEl.classList.remove('loading');
-            }
-          });
-        }
-        return;
-      }
-
-      // Not an image/excel - remove special modes
-      document.getElementById('content-page').classList.remove('image-mode', 'excel-mode');
-
-      // Non-PDF: proceed with text/markdown rendering
-      const contentStr = (typeof content === 'string') ? content : '';
-
-      // Extract first line as title, rest as body content
-      const lines = contentStr.split('\n');
-      let title = lines[0] || fileName;
-      let bodyContent = lines.slice(1).join('\n').trimStart();
-
-      // Strip markdown heading prefix (# ## ### etc) from title
-      title = title.replace(/^#+\s*/, '');
-
-      headerTitle.textContent = title;
-      headerDesc.textContent = '';
-
-      // Check if it's a markdown file or text file
-      if (!Markdown) {
-        body.innerHTML = `<pre style="color:#888;white-space:pre-wrap;padding:16px;">${escapeHtml(bodyContent)}</pre>`;
-        return;
-      }
-
-      const isMarkdown = Markdown.isMarkdownFile(fileName);
-      const isText = Markdown.isTextFile(fileName);
-
-      if (!isText) {
-        body.innerHTML = '<div class="markdown-content"><p style="color:#666;">Binary file - cannot display</p></div>';
-        return;
-      }
-
-      if (isMarkdown) {
-        // Render remaining content as markdown
-        const html = Markdown.parseMarkdown(bodyContent);
-        body.innerHTML = `<div class="markdown-content">${html}</div>`;
-      } else {
-        // Render as plain text with code styling
-        body.innerHTML = `<div class="markdown-content"><pre class="md-code-block"><code>${escapeHtml(bodyContent)}</code></pre></div>`;
-      }
-    }
-
-    // Render objective view (original content view)
+    // Render objective view
     function renderObjectiveView() {
-      // Remove image mode
-      document.getElementById('content-page').classList.remove('image-mode');
-
       const headerTitle = document.getElementById('content-header-title');
       const headerDesc = document.getElementById('content-header-description');
       const body = document.getElementById('content-body');
-
-      // Handle no vault selected or no objectives
-      const SideListState = window.Objectiv?.SideListState;
-      const hasVault = SideListState?.getRootPath?.();
-
-      if (!hasVault) {
-        headerTitle.textContent = 'Welcome to Objectiv';
-        headerDesc.textContent = 'Select a folder to use as your vault';
-        body.innerHTML = '';
-        return;
-      }
 
       if (data.objectives.length === 0) {
         headerTitle.textContent = 'No objectives yet';

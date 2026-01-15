@@ -1,19 +1,13 @@
 {
   "name": "Objectiv",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Objectiv - A tool for transmuting dreams into reality.",
-  "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "dev": "npx serve .",
+    "start": "npx serve .",
     "terminal": "node life.js"
   },
   "dependencies": {
-    "@fortune-sheet/core": "^1.0.4",
-    "@supabase/supabase-js": "^2.47.0",
-    "blessed": "^0.1.81",
-    "exceljs": "^4.4.0"
-  },
-  "devDependencies": {
-    "electron": "^33.0.0"
+    "blessed": "^0.1.81"
   }
 }

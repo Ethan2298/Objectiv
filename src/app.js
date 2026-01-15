@@ -16,10 +16,7 @@ import * as Utils from './utils.js';
 import * as Clarity from './clarity.js';
 import * as ListItem from './components/list-item.js';
 import * as EditController from './controllers/edit-controller.js';
-import * as FolderExplorer from './components/folder-explorer.js';
 import * as Markdown from './utils/markdown.js';
-import * as PdfRenderer from './utils/pdf-renderer.js';
-import * as ExcelRenderer from './utils/excel-renderer.js';
 
 // ========================================
 // Re-export for global access
@@ -34,10 +31,7 @@ window.Objectiv = {
   Clarity,
   ListItem,
   EditController,
-  FolderExplorer,
-  Markdown,
-  PdfRenderer,
-  ExcelRenderer
+  Markdown
 };
 
 // ========================================
@@ -60,9 +54,6 @@ export function init() {
 
   // Initialize side list state (unified navigation)
   SideListState.init();
-
-  // Initialize folder explorer (legacy, will be merged)
-  FolderExplorer.init();
 }
 
 // Auto-initialize when DOM is ready
@@ -84,10 +75,7 @@ export {
   Clarity,
   ListItem,
   EditController,
-  FolderExplorer,
-  Markdown,
-  PdfRenderer,
-  ExcelRenderer
+  Markdown
 };
 
 export default {
@@ -98,9 +86,6 @@ export default {
   Clarity,
   ListItem,
   EditController,
-  FolderExplorer,
   Markdown,
-  PdfRenderer,
-  ExcelRenderer,
   init
 };
