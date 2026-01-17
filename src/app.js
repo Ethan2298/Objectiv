@@ -29,6 +29,7 @@ import * as Constants from './constants.js';
 import * as Platform from './features/platform.js';
 import * as Intro from './features/intro.js';
 import * as Sidebar from './features/sidebar.js';
+import * as Tabs from './features/tabs.js';
 import * as Mobile from './features/mobile.js';
 
 // ========================================
@@ -363,6 +364,9 @@ export async function init() {
 
   // Initialize sidebar
   Sidebar.init();
+
+  // Initialize tabs
+  Tabs.initTabs();
 
   // Initialize mobile
   Mobile.init();
