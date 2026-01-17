@@ -196,7 +196,7 @@ body.platform-darwin #btn-close {
 #app {
   display: none;
   grid-template-columns: var(--sidebar-width, 280px) 1fr;
-  grid-template-rows: 36px 1fr;
+  grid-template-rows: 36px auto 1fr;
   width: 100%;
   height: calc(100vh - 40px);
 }
@@ -208,7 +208,6 @@ body.platform-darwin #btn-close {
   align-items: center;
   height: 36px;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
   padding: 3px 8px;
   z-index: 5;
   -webkit-app-region: drag; /* Make header draggable */
@@ -229,12 +228,17 @@ body.platform-darwin.fullscreen #header {
   -webkit-app-region: no-drag; /* Keep buttons/tabs clickable */
 }
 
-#side-list {
+#global-nav-row {
+  grid-column: 1 / -1;
   grid-row: 2;
 }
 
+#side-list {
+  grid-row: 3;
+}
+
 #content-view {
-  grid-row: 2;
+  grid-row: 3;
 }
 
 #app.sidebar-collapsed {
@@ -267,10 +271,10 @@ body.platform-darwin.fullscreen #header {
 
 #resize-handle {
   position: fixed;
-  top: 36px; /* Below header */
+  top: 80px; /* Below header (36px) + nav row (44px) */
   left: calc(var(--sidebar-width, 280px) - 8px);
   width: 16px;
-  height: calc(100vh - 36px);
+  height: calc(100vh - 80px);
   cursor: col-resize;
   z-index: 10;
   background: transparent;
@@ -461,6 +465,18 @@ body.light-mode .side-item.selected {
 
 #content-view > #content-page.web-mode {
   padding-top: 0;
+  align-self: stretch;
+  height: 100%;
+}
+
+/* Ensure content-view fills height in web mode */
+#app.web-mode #content-view {
+  overflow: hidden;
+  padding: 0;
+}
+
+#app.web-mode .mobile-header {
+  display: none;
 }
 
 #content-page.web-mode #content-header {
@@ -480,55 +496,161 @@ body.light-mode .side-item.selected {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  height: 100%;
+}
+
+.web-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.web-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.web-nav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.web-nav-btn:active {
+  background: var(--bg-subtle);
+}
+
+.web-nav-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .web-url-bar {
   display: flex;
   align-items: center;
+  flex: 1;
   gap: 8px;
-  padding: 0 16px 12px 16px;
+  padding: 6px 12px;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+  margin-left: 4px;
+}
+
+.web-url-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-dim);
 }
 
 .web-url-input {
   flex: 1;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
   font-size: 13px;
   outline: none;
 }
 
-.web-url-input:focus {
-  border-color: var(--accent);
-}
-
 .web-url-input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-dim);
 }
 
-.web-go-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  background: var(--accent);
-  color: white;
-  font-size: 13px;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.web-go-btn:hover {
-  opacity: 0.9;
+.web-url-input::selection {
+  background: rgba(8, 145, 178, 0.3);
 }
 
 .web-browser-frame {
   flex: 1;
   border: none;
-  border-top: 1px solid var(--border);
   background: white;
   min-height: 0;
+  height: 100%;
+}
+
+/* ========================================
+   Web Search Dropdown (Omnibox)
+   ======================================== */
+.web-url-bar {
+  position: relative;
+}
+
+.web-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.web-search-section {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding: 8px 12px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.web-search-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.web-search-result:hover,
+.web-search-result.selected {
+  background: var(--bg-hover);
+}
+
+.web-search-result-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.web-search-result-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-search-result-name mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.web-search-empty {
+  padding: 12px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+body.light-mode .web-search-dropdown {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 /* ========================================
@@ -581,6 +703,105 @@ body.light-mode .side-item.selected {
 
 .header-spacer {
   flex: 1;
+}
+
+/* Global Navigation Row */
+.global-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Global Navigation Bar (Omnibox) */
+.global-nav-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 6px 12px;
+  background: var(--bg-subtle);
+  border-radius: 6px;
+}
+
+.global-nav-bar:focus-within {
+  outline: 1px solid var(--accent);
+}
+
+.global-nav-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.global-nav-input {
+  flex: 1;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.global-nav-input::placeholder {
+  color: var(--text-dim);
+}
+
+.global-nav-input::selection {
+  background: rgba(8, 145, 178, 0.3);
+}
+
+/* Position dropdown relative to global nav bar */
+.global-nav-bar .web-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+}
+
+/* Navigation buttons in global nav row */
+.global-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.global-nav-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.global-nav-btn:active {
+  background: var(--bg-subtle);
+}
+
+.global-nav-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Hide nav buttons when not in web mode */
+.global-nav-btn.web-only {
+  display: none;
+}
+
+#app.web-mode .global-nav-btn.web-only {
+  display: flex;
 }
 
 /* Header Tabs */

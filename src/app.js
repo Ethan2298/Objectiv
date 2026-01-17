@@ -51,6 +51,7 @@ import * as DeleteModal from './components/delete-modal.js';
 import * as SideList from './components/side-list.js';
 import * as ContentView from './components/content-view.js';
 import * as NextStepTimer from './components/next-step-timer.js';
+import * as GlobalNav from './components/global-nav.js';
 
 // ========================================
 // Global Window Reference
@@ -88,7 +89,8 @@ window.Objectiv = {
   DeleteModal,
   SideList,
   ContentView,
-  NextStepTimer
+  NextStepTimer,
+  GlobalNav
 };
 
 // ========================================
@@ -137,6 +139,12 @@ function wireCallbacks() {
   // Wire Tabs callbacks
   Tabs.setCallbacks({
     updateView
+  });
+
+  // Wire GlobalNav callbacks
+  GlobalNav.setCallbacks({
+    renderContentView: ContentView.renderContentView,
+    renderSideList: SideList.renderSideList
   });
 }
 
@@ -433,6 +441,9 @@ export async function init() {
 
   // Initialize navigation controller
   NavigationController.init();
+
+  // Initialize global nav bar
+  GlobalNav.init();
 
   // Initialize event handlers
   initEventHandlers();
