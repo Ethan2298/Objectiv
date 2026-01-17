@@ -3,6 +3,41 @@
  */
 
 /**
+ * Generate unique ID
+ * @returns {string} Unique identifier
+ */
+export function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+/**
+ * Format duration in seconds to human-readable format
+ * @param {number} totalSeconds - Duration in seconds
+ * @returns {string} Formatted duration (e.g., "15m", "1h 5m")
+ */
+export function formatDuration(totalSeconds) {
+  if (totalSeconds < 60) return '<1m';
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+
+/**
+ * Format seconds to H:MM:SS timer display
+ * @param {number} totalSeconds - Duration in seconds
+ * @returns {string} Formatted timer (e.g., "0:05:30")
+ */
+export function formatTimerDisplay(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
  * Format timestamp for display
  * Shows: "Jan 9 2:34pm" (current year) or "Jan 9 2025 2:34pm" (other years)
  */
@@ -88,6 +123,9 @@ export function delay(ms) {
 }
 
 export default {
+  generateId,
+  formatDuration,
+  formatTimerDisplay,
   formatTimestamp,
   capitalize,
   typeText,
