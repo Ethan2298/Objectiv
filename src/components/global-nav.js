@@ -6,6 +6,7 @@
  */
 
 import AppState from '../state/app-state.js';
+import * as BookmarkStorage from '../data/bookmark-storage.js';
 
 // ========================================
 // State
@@ -22,6 +23,12 @@ let breadcrumb = null;
 let btnBack = null;
 let btnForward = null;
 let btnRefresh = null;
+let btnBookmark = null;
+
+// Current web URL (for bookmark tracking)
+let currentWebUrl = null;
+let currentPageTitle = null;
+let currentFaviconUrl = null;
 
 // Callbacks
 let _renderContentView = () => {};
@@ -43,10 +50,16 @@ export function init() {
   btnBack = document.getElementById('nav-back');
   btnForward = document.getElementById('nav-forward');
   btnRefresh = document.getElementById('nav-refresh');
+  btnBookmark = document.getElementById('nav-bookmark');
 
   if (!navInput || !dropdown) {
     console.warn('Global nav elements not found');
     return;
+  }
+
+  // Bookmark button click handler
+  if (btnBookmark) {
+    btnBookmark.addEventListener('click', handleBookmarkClick);
   }
 
   // Input event - show dropdown as user types
@@ -699,6 +712,86 @@ export function setUrl(url) {
     navInput.value = url;
     navInput.placeholder = 'Search or enter URL';
   }
+
+  // Track current URL for bookmark feature
+  currentWebUrl = url;
+  checkBookmarkStatus(url);
+}
+
+/**
+ * Set the current page title (for bookmark feature)
+ */
+export function setPageTitle(title) {
+  currentPageTitle = title;
+}
+
+/**
+ * Set the current favicon URL (for bookmark feature)
+ */
+export function setFavicon(faviconUrl) {
+  currentFaviconUrl = faviconUrl;
+}
+
+// ========================================
+// Bookmark Functions
+// ========================================
+
+/**
+ * Handle bookmark button click - toggle bookmark state
+ */
+function handleBookmarkClick() {
+  if (!currentWebUrl) return;
+
+  const existingBookmark = BookmarkStorage.findBookmarkByUrl(currentWebUrl);
+
+  if (existingBookmark) {
+    // Remove bookmark
+    BookmarkStorage.deleteBookmark(existingBookmark.id);
+    updateBookmarkIcon(false);
+  } else {
+    // Add bookmark
+    const title = currentPageTitle || currentWebUrl;
+    const bookmark = BookmarkStorage.createBookmark(
+      currentWebUrl,
+      title,
+      currentFaviconUrl,
+      null, // folderId - unfiled by default
+      Date.now() // orderIndex - use timestamp to put at end
+    );
+    BookmarkStorage.addBookmark(bookmark);
+    updateBookmarkIcon(true);
+  }
+
+  // Re-render side list to show/hide bookmark
+  _renderSideList();
+}
+
+/**
+ * Update the bookmark button icon state
+ */
+function updateBookmarkIcon(isBookmarked) {
+  if (!btnBookmark) return;
+
+  if (isBookmarked) {
+    btnBookmark.classList.add('bookmarked');
+    btnBookmark.title = 'Remove bookmark';
+  } else {
+    btnBookmark.classList.remove('bookmarked');
+    btnBookmark.title = 'Bookmark this page';
+  }
+}
+
+/**
+ * Check if the current URL is bookmarked and update icon
+ */
+function checkBookmarkStatus(url) {
+  if (!url) {
+    updateBookmarkIcon(false);
+    return;
+  }
+
+  const existingBookmark = BookmarkStorage.findBookmarkByUrl(url);
+  updateBookmarkIcon(!!existingBookmark);
 }
 
 /**
@@ -765,6 +858,8 @@ export default {
   init,
   setCallbacks,
   setUrl,
+  setPageTitle,
+  setFavicon,
   setIcon,
   clear,
   updateFromSelection

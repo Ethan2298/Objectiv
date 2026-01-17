@@ -876,6 +876,44 @@ body.light-mode .web-search-dropdown {
   display: flex;
 }
 
+/* Bookmark button - hidden by default, visible in web mode */
+.bookmark-btn {
+  display: none;
+  margin-left: auto;
+}
+
+#app.web-mode .bookmark-btn {
+  display: flex;
+}
+
+.bookmark-btn.bookmarked svg {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+/* Bookmark row in side list */
+.side-item.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bookmark-favicon {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
+.bookmark-globe-icon {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  stroke: currentColor;
+  opacity: 0.6;
+}
+
 /* Header Tabs */
 .header-tabs {
   display: flex;
@@ -2359,6 +2397,16 @@ body.light-mode .side-item.folder-row.selected {
 .side-item[data-type="objective"][data-depth="2"] { padding-left: 42px; }
 .side-item[data-type="objective"][data-depth="3"] { padding-left: 50px; }
 .side-item[data-type="objective"][data-depth="4"] { padding-left: 58px; }
+
+/* Bookmark row - same indentation as objectives */
+.side-item[data-type="bookmark"] {
+  padding-left: 16px;
+}
+
+.side-item[data-type="bookmark"][data-depth="1"] { padding-left: 34px; }
+.side-item[data-type="bookmark"][data-depth="2"] { padding-left: 42px; }
+.side-item[data-type="bookmark"][data-depth="3"] { padding-left: 50px; }
+.side-item[data-type="bookmark"][data-depth="4"] { padding-left: 58px; }
 
 /* Indent guide lines - centered under parent chevron */
 /* Chevron center = padding-left + (toggle-width / 2) = 16px + 10px = 26px */

@@ -9,6 +9,7 @@
  */
 
 import * as TabState from './tab-state.js';
+import * as BookmarkStorage from '../data/bookmark-storage.js';
 
 // ========================================
 // State Shape
@@ -32,6 +33,7 @@ export const ItemType = {
   UNFILED_HEADER: 'unfiled-header',
   OBJECTIVE: 'objective',
   FOLDER: 'folder',
+  BOOKMARK: 'bookmark',
   ADD_OBJECTIVE: 'add-objective',
   ADD_FOLDER: 'add-folder'
 };
@@ -59,6 +61,9 @@ export function getSelectedIndex() {
     }
     if (selection.type === 'folder' && item.type === ItemType.FOLDER) {
       return item.folderId === selection.id;
+    }
+    if (selection.type === 'bookmark' && item.type === ItemType.BOOKMARK) {
+      return item.bookmarkId === selection.id;
     }
     return false;
   });
@@ -109,6 +114,8 @@ export function setSelectedIndex(index) {
       TabState.setSelection(item.objectiveId, 'objective');
     } else if (item.type === ItemType.FOLDER) {
       TabState.setSelection(item.folderId, 'folder');
+    } else if (item.type === ItemType.BOOKMARK) {
+      TabState.setSelection(item.bookmarkId, 'bookmark');
     }
   }
 }
@@ -141,6 +148,7 @@ export function selectItem(type, identifier) {
     if (item.type !== type) return false;
     if (type === ItemType.OBJECTIVE) return item.objectiveId === identifier;
     if (type === ItemType.FOLDER) return item.folderId === identifier;
+    if (type === ItemType.BOOKMARK) return item.bookmarkId === identifier;
     return false;
   });
   if (index !== -1) {
@@ -202,6 +210,9 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
   // Get expanded folders from TabState
   const expandedFolders = TabState.getExpandedFolders();
 
+  // Load bookmarks from storage
+  const bookmarks = BookmarkStorage.loadAllBookmarks();
+
   // Add Home item at the top
   items.push({
     type: ItemType.HOME,
@@ -220,9 +231,13 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
   const unfiledObjectives = objectives.filter(obj => !obj.folderId);
   const filedObjectives = objectives.filter(obj => obj.folderId);
 
+  // Separate unfiled and filed bookmarks
+  const unfiledBookmarks = bookmarks.filter(bm => !bm.folderId);
+  const filedBookmarks = bookmarks.filter(bm => bm.folderId);
+
   // Build folder tree structure
   const folderMap = new Map();
-  folders.forEach(f => folderMap.set(f.id, { ...f, children: [], objectives: [] }));
+  folders.forEach(f => folderMap.set(f.id, { ...f, children: [], objectives: [], bookmarks: [] }));
 
   // Assign objectives to folders
   filedObjectives.forEach(obj => {
@@ -232,6 +247,17 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
     } else {
       // Folder not found, treat as unfiled
       unfiledObjectives.push(obj);
+    }
+  });
+
+  // Assign bookmarks to folders
+  filedBookmarks.forEach(bm => {
+    const folder = folderMap.get(bm.folderId);
+    if (folder) {
+      folder.bookmarks.push(bm);
+    } else {
+      // Folder not found, treat as unfiled
+      unfiledBookmarks.push(bm);
     }
   });
 
@@ -250,14 +276,16 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
     }
   });
 
-  // Combine unfiled objectives and root folders, then sort by orderIndex
+  // Combine unfiled objectives, bookmarks, and root folders, then sort by orderIndex
   const rootItems = [
     ...unfiledObjectives.map(obj => ({ type: 'objective', data: obj, orderIndex: obj.orderIndex || 0 })),
+    ...unfiledBookmarks.map(bm => ({ type: 'bookmark', data: bm, orderIndex: bm.orderIndex || 0 })),
     ...rootFolders.map(folder => ({ type: 'folder', data: folder, orderIndex: folder.orderIndex || 0 }))
   ].sort((a, b) => a.orderIndex - b.orderIndex);
 
   // Recursively add folders and their contents
   function addFolderItems(folder, depth) {
+    const hasBookmarks = folder.bookmarks && folder.bookmarks.length > 0;
     items.push({
       type: ItemType.FOLDER,
       folderId: folder.id,
@@ -265,14 +293,15 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
       name: folder.name,
       parentId: folder.parentId,
       depth,
-      hasChildren: folder.children.length > 0 || folder.objectives.length > 0
+      hasChildren: folder.children.length > 0 || folder.objectives.length > 0 || hasBookmarks
     });
 
     // Only show contents if folder is expanded (use expandedFolders from TabState)
     if (expandedFolders.has(folder.id)) {
-      // Combine objectives and child folders, then sort by orderIndex
+      // Combine objectives, bookmarks, and child folders, then sort by orderIndex
       const folderContents = [
         ...folder.objectives.map(obj => ({ type: 'objective', data: obj, orderIndex: obj.orderIndex || 0 })),
+        ...(folder.bookmarks || []).map(bm => ({ type: 'bookmark', data: bm, orderIndex: bm.orderIndex || 0 })),
         ...folder.children.map(child => ({ type: 'folder', data: child, orderIndex: child.orderIndex || 0 }))
       ].sort((a, b) => a.orderIndex - b.orderIndex);
 
@@ -289,6 +318,18 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
             folderId: folder.id,
             depth: depth + 1
           });
+        } else if (item.type === 'bookmark') {
+          const bm = item.data;
+          items.push({
+            type: ItemType.BOOKMARK,
+            bookmarkId: bm.id,
+            data: bm,
+            name: bm.title,
+            url: bm.url,
+            faviconUrl: bm.faviconUrl,
+            folderId: folder.id,
+            depth: depth + 1
+          });
         } else {
           addFolderItems(item.data, depth + 1);
         }
@@ -296,7 +337,7 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
     }
   }
 
-  // Add root items (interleaved objectives and folders)
+  // Add root items (interleaved objectives, bookmarks, and folders)
   rootItems.forEach(item => {
     if (item.type === 'objective') {
       const obj = item.data;
@@ -307,6 +348,18 @@ export function rebuildItems({ objectives = [], folders = [], isAddingObjective 
         objectiveId: obj.id,
         data: obj,
         name: obj.name,
+        folderId: null,
+        depth: 0
+      });
+    } else if (item.type === 'bookmark') {
+      const bm = item.data;
+      items.push({
+        type: ItemType.BOOKMARK,
+        bookmarkId: bm.id,
+        data: bm,
+        name: bm.title,
+        url: bm.url,
+        faviconUrl: bm.faviconUrl,
         folderId: null,
         depth: 0
       });

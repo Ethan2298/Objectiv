@@ -5,6 +5,7 @@
  */
 
 import AppState from '../state/app-state.js';
+import * as BookmarkStorage from '../data/bookmark-storage.js';
 
 // ========================================
 // Callbacks (set by app.js)
@@ -283,6 +284,33 @@ function createSideListItem(itemData, idx, isSelected) {
       setupDropTarget(item, 'objective', itemData.objectiveId);
       break;
 
+    case ItemType.BOOKMARK:
+      item.className = 'side-item bookmark-row' + (isSelected ? ' selected' : '');
+      item.dataset.type = 'bookmark';
+      item.dataset.bookmarkId = itemData.bookmarkId;
+      item.dataset.folderId = itemData.folderId || '';
+
+      // Favicon or globe fallback
+      const faviconHtml = itemData.faviconUrl
+        ? `<img class="bookmark-favicon" src="${itemData.faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><svg class="bookmark-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="display:none"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
+        : `<svg class="bookmark-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+
+      item.innerHTML = `
+        ${faviconHtml}
+        <span class="side-item-name">${itemData.name}</span>${indicator}
+      `;
+
+      item.onclick = () => handleBookmarkClick(idx, itemData);
+
+      item.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showBookmarkContextMenu(e, itemData);
+      });
+
+      setupDraggable(item, 'bookmark', itemData.bookmarkId, itemData.data);
+      setupDropTarget(item, 'bookmark', itemData.bookmarkId);
+      break;
+
     default:
       item.innerHTML = `<span class="side-item-name">${itemData.name || '?'}</span>`;
   }
@@ -530,6 +558,82 @@ function showFolderContextMenu(e, itemData) {
   });
 }
 
+/**
+ * Handle click on a bookmark item
+ */
+function handleBookmarkClick(idx, itemData) {
+  const SideListState = window.Objectiv?.SideListState;
+  const GlobalNav = window.Objectiv?.GlobalNav;
+
+  // Update selection
+  SideListState.setSelectedIndex(idx);
+  _playNotch();
+
+  // Switch to web mode and load the URL
+  AppState.setViewMode('web');
+  const app = document.getElementById('app');
+  app?.classList.add('web-mode');
+
+  updateSideListSelection();
+  _renderContentView();
+  _updateTabTitle();
+
+  // Load the URL in the webview after render
+  setTimeout(() => {
+    const webview = document.querySelector('.web-browser-frame');
+    if (webview && itemData.url) {
+      webview.src = itemData.url;
+
+      // Update nav bar
+      if (GlobalNav?.setUrl) {
+        GlobalNav.setUrl(itemData.url);
+      }
+    }
+  }, 50);
+
+  if (AppState.isMobile()) {
+    const Mobile = window.Objectiv?.Mobile;
+    if (Mobile?.setMobileView) Mobile.setMobileView('detail');
+  }
+}
+
+/**
+ * Show context menu for bookmark items
+ */
+function showBookmarkContextMenu(e, itemData) {
+  const ContextMenu = window.Objectiv?.ContextMenu;
+  const DeleteModal = window.Objectiv?.DeleteModal;
+
+  if (!ContextMenu) return;
+
+  ContextMenu.showContextMenu({
+    x: e.clientX,
+    y: e.clientY,
+    items: [
+      {
+        label: 'Delete',
+        danger: true,
+        action: () => {
+          if (!DeleteModal) return;
+
+          DeleteModal.showDeleteModal({
+            itemName: itemData.name || 'Bookmark',
+            itemType: 'bookmark',
+            onConfirm: async () => {
+              try {
+                BookmarkStorage.deleteBookmark(itemData.bookmarkId);
+                _updateView();
+              } catch (err) {
+                console.error('Failed to delete bookmark:', err);
+              }
+            }
+          });
+        }
+      }
+    ]
+  });
+}
+
 // ========================================
 // Drag and Drop
 // ========================================
@@ -671,6 +775,8 @@ function setupDropTarget(element, targetType, targetId) {
         await handleObjectiveDrop(dragId, dragData, insertPosition);
       } else if (dragType === 'folder') {
         await handleFolderDrop(dragId, dragData, insertPosition);
+      } else if (dragType === 'bookmark') {
+        await handleBookmarkDrop(dragId, dragData, insertPosition);
       }
     } catch (err) {
       console.error('Drop failed:', err);
@@ -746,6 +852,33 @@ async function handleFolderDrop(dragId, dragData, insertPosition) {
 
   const folders = await Repository.loadAllFolders();
   AppState.setFolders(folders);
+  renderSideList();
+}
+
+async function handleBookmarkDrop(dragId, dragData, insertPosition) {
+  if (!insertPosition) return;
+
+  const { targetId, targetType, position, folderId } = insertPosition;
+
+  const newFolderId = targetType === 'unfiled' ? null :
+                      targetType === 'folder' ? targetId : folderId;
+
+  // Calculate new order index based on position
+  const bookmarks = BookmarkStorage.loadAllBookmarks();
+  let newOrderIndex;
+
+  if (targetType === 'folder') {
+    // Moving into a folder - put at end
+    const folderBookmarks = bookmarks.filter(b => b.folderId === targetId);
+    newOrderIndex = folderBookmarks.length > 0
+      ? Math.max(...folderBookmarks.map(b => b.orderIndex || 0)) + 1000
+      : 1000;
+  } else {
+    // Use a simple timestamp-based order
+    newOrderIndex = Date.now();
+  }
+
+  BookmarkStorage.updateBookmarkOrder(dragId, newOrderIndex, newFolderId);
   renderSideList();
 }
 

@@ -10,6 +10,7 @@
 // ========================================
 
 import * as Repository from './data/repository.js';
+import * as BookmarkStorage from './data/bookmark-storage.js';
 import * as TabState from './state/tab-state.js';
 import * as SideListState from './state/side-list-state.js';
 import * as AppState from './state/app-state.js';
@@ -62,6 +63,7 @@ import * as GlobalNav from './components/global-nav.js';
 window.Objectiv = {
   // Data & State
   Repository,
+  BookmarkStorage,
   TabState,
   SideListState,
   AppState,
@@ -489,6 +491,7 @@ if (document.readyState === 'loading') {
 export {
   // Data & State
   Repository,
+  BookmarkStorage,
   TabState,
   SideListState,
   AppState,
@@ -529,6 +532,7 @@ export {
 
 export default {
   Repository,
+  BookmarkStorage,
   TabState,
   SideListState,
   AppState,
