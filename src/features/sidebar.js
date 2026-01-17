@@ -18,6 +18,7 @@ const MAX_WIDTH = 500;
 // ========================================
 
 let isResizing = false;
+let isHoverExpanded = false; // Track if expanded via hover
 
 // ========================================
 // Sidebar Toggle
@@ -73,6 +74,41 @@ export function toggleSidebar() {
 export function isSidebarCollapsed() {
   const app = document.getElementById('app');
   return app?.classList.contains('sidebar-collapsed') || false;
+}
+
+// ========================================
+// Sidebar Hover Expand
+// ========================================
+
+/**
+ * Initialize hover-to-expand when sidebar is collapsed
+ */
+export function initSidebarHover() {
+  const app = document.getElementById('app');
+  const sideList = document.getElementById('side-list');
+
+  if (!app || !sideList) return;
+
+  // Create hover trigger zone
+  const trigger = document.createElement('div');
+  trigger.id = 'sidebar-hover-trigger';
+  app.appendChild(trigger);
+
+  // Expand on trigger hover
+  trigger.addEventListener('mouseenter', () => {
+    if (app.classList.contains('sidebar-collapsed')) {
+      isHoverExpanded = true;
+      app.classList.remove('sidebar-collapsed');
+    }
+  });
+
+  // Collapse when leaving sidebar (if hover-expanded)
+  sideList.addEventListener('mouseleave', () => {
+    if (isHoverExpanded) {
+      isHoverExpanded = false;
+      app.classList.add('sidebar-collapsed');
+    }
+  });
 }
 
 // ========================================
@@ -153,6 +189,7 @@ export function getSidebarWidth() {
 export function init() {
   initSidebarToggle();
   initSidebarResize();
+  initSidebarHover();
 }
 
 // ========================================
@@ -162,6 +199,7 @@ export function init() {
 export default {
   initSidebarToggle,
   initSidebarResize,
+  initSidebarHover,
   toggleSidebar,
   isSidebarCollapsed,
   setSidebarWidth,

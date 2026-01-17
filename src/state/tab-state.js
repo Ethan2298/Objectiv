@@ -13,6 +13,7 @@
  * @typedef {Object} TabStateData
  * @property {string} id - Unique tab identifier
  * @property {string} title - Tab display title
+ * @property {string|null} icon - Tab icon (URL for favicon, or icon type like 'home', 'folder', 'objective')
  * @property {{id: string|null, type: 'folder'|'objective'|null}} selection - Current selection
  * @property {Set<string>} expandedFolders - Set of expanded folder IDs
  * @property {'folder'|'objective'|'empty'} viewMode - Current view mode
@@ -39,10 +40,11 @@ const STORAGE_KEY = 'objectiv-tab-state';
 /**
  * Create a fresh tab state object
  */
-function createTabState(id, title = 'Home') {
+function createTabState(id, title = 'Home', icon = 'home') {
   return {
     id,
     title,
+    icon,
     selection: { id: 'home', type: 'home' },
     expandedFolders: new Set(),
     viewMode: 'home',
@@ -256,6 +258,25 @@ export function setTabTitle(title) {
 }
 
 /**
+ * Get icon of active tab
+ */
+export function getTabIcon() {
+  const tab = getActiveTab();
+  return tab ? tab.icon : null;
+}
+
+/**
+ * Set icon of active tab
+ */
+export function setTabIcon(icon) {
+  const tab = getActiveTab();
+  if (tab) {
+    tab.icon = icon;
+    saveToStorage();
+  }
+}
+
+/**
  * Get title of specific tab
  */
 export function getTabTitleById(tabId) {
@@ -310,6 +331,7 @@ export function saveToStorage() {
       tabs: Array.from(state.tabs.entries()).map(([id, tab]) => ({
         id: tab.id,
         title: tab.title,
+        icon: tab.icon,
         selection: tab.selection,
         expandedFolders: Array.from(tab.expandedFolders),
         viewMode: tab.viewMode,
@@ -339,6 +361,7 @@ export function loadFromStorage() {
           state.tabs.set(tab.id, {
             id: tab.id,
             title: tab.title,
+            icon: tab.icon || null,
             selection: tab.selection || { id: null, type: null },
             expandedFolders: new Set(tab.expandedFolders || []),
             viewMode: tab.viewMode || 'empty',
@@ -443,6 +466,8 @@ export default {
   // Tab Metadata
   getTabTitle,
   setTabTitle,
+  getTabIcon,
+  setTabIcon,
   getTabTitleById,
   setTabTitleById,
   getTabIds,

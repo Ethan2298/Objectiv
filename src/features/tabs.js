@@ -91,6 +91,7 @@ function syncDomWithState() {
       tab.className = 'header-tab' + (tabId === activeTabId ? ' active' : '');
       tab.dataset.tabId = tabId;
       tab.innerHTML = `
+        <span class="tab-icon">${getTabIconHtml(tabData.icon)}</span>
         <span class="tab-title">${escapeHtml(tabData.title)}</span>
         <button class="tab-close" aria-label="Close tab">&times;</button>
       `;
@@ -106,6 +107,30 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * Get icon HTML for a tab (handles both URL and built-in types)
+ */
+function getTabIconHtml(icon) {
+  if (!icon) return getIconSvgInline('home');
+  if (icon.startsWith('http') || icon.startsWith('data:')) {
+    return `<img src="${escapeHtml(icon)}" alt="" />`;
+  }
+  return getIconSvgInline(icon);
+}
+
+/**
+ * Get SVG icon markup for built-in icon types (inline version for initial render)
+ */
+function getIconSvgInline(iconType) {
+  const icons = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+    folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    objective: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+    web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+  };
+  return icons[iconType] || icons.home;
 }
 
 /**
@@ -220,6 +245,7 @@ function handleCreateTab() {
   tab.className = 'header-tab active';
   tab.dataset.tabId = newTabId;
   tab.innerHTML = `
+    <span class="tab-icon">${getIconSvgInline('home')}</span>
     <span class="tab-title">Home</span>
     <button class="tab-close" aria-label="Close tab">&times;</button>
   `;
@@ -254,6 +280,34 @@ export function updateActiveTabTitle(title) {
 }
 
 /**
+ * Update the active tab's icon (both state and DOM)
+ * @param {string} icon - Icon type ('home', 'folder', 'objective', 'web') or favicon URL
+ */
+export function updateActiveTabIcon(icon) {
+  // Update state
+  TabState.setTabIcon(icon);
+
+  // Update DOM
+  const activeTabId = TabState.getActiveTabId();
+  const activeTabEl = document.querySelector(`.header-tab[data-tab-id="${activeTabId}"]`);
+  if (activeTabEl) {
+    let iconEl = activeTabEl.querySelector('.tab-icon');
+
+    // Create icon element if it doesn't exist
+    if (!iconEl) {
+      iconEl = document.createElement('span');
+      iconEl.className = 'tab-icon';
+      const titleEl = activeTabEl.querySelector('.tab-title');
+      if (titleEl) {
+        activeTabEl.insertBefore(iconEl, titleEl);
+      }
+    }
+
+    iconEl.innerHTML = getTabIconHtml(icon);
+  }
+}
+
+/**
  * Get the active tab ID (for external use)
  */
 export function getActiveTabId() {
@@ -268,5 +322,6 @@ export default {
   initTabs,
   setCallbacks,
   updateActiveTabTitle,
+  updateActiveTabIcon,
   getActiveTabId
 };

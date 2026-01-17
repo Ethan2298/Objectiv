@@ -443,6 +443,15 @@ function navigateToResult(result) {
         if (navInput) {
           navInput.value = url;
         }
+
+        // Set initial tab title from URL hostname
+        try {
+          const Tabs = window.Objectiv?.Tabs;
+          const hostname = new URL(url).hostname;
+          if (Tabs && hostname) {
+            Tabs.updateActiveTabTitle(hostname);
+          }
+        } catch (e) { /* ignore */ }
       }
     }, 50);
   }
@@ -626,6 +635,7 @@ export function updateFromSelection() {
   if (viewMode === 'home') {
     renderBreadcrumb([{ name: 'Home', folderId: null, isCurrent: true }]);
     navInput.value = '';
+    setIcon('home');
     return;
   }
 
@@ -635,6 +645,8 @@ export function updateFromSelection() {
     if (!navInput.value) {
       navInput.placeholder = 'Search or enter URL';
     }
+    // Icon will be set by favicon event, default to web globe
+    setIcon('web');
     return;
   }
 
@@ -645,6 +657,7 @@ export function updateFromSelection() {
       renderBreadcrumb(segments);
       navInput.value = '';
     }
+    setIcon('folder');
     return;
   }
 
@@ -663,6 +676,7 @@ export function updateFromSelection() {
       renderBreadcrumb(segments);
       navInput.value = '';
     }
+    setIcon('objective');
     return;
   }
 
@@ -670,6 +684,7 @@ export function updateFromSelection() {
   if (breadcrumb) breadcrumb.classList.remove('visible');
   navInput.value = '';
   navInput.placeholder = 'Search or enter URL';
+  setIcon('search');
 }
 
 // ========================================
@@ -695,10 +710,62 @@ export function clear() {
   }
 }
 
+/**
+ * Update the nav bar icon
+ * @param {string} icon - Icon type ('search', 'home', 'folder', 'objective', 'web') or favicon URL
+ */
+export function setIcon(icon) {
+  const navBar = document.getElementById('global-nav-bar');
+  if (!navBar) return;
+
+  let iconEl = navBar.querySelector('.global-nav-icon');
+  if (!iconEl) return;
+
+  // Check if it's a URL (favicon)
+  if (icon && (icon.startsWith('http') || icon.startsWith('data:'))) {
+    // Replace SVG with img if needed
+    if (iconEl.tagName === 'SVG') {
+      const img = document.createElement('img');
+      img.className = 'global-nav-icon global-nav-favicon';
+      img.src = icon;
+      img.alt = '';
+      iconEl.replaceWith(img);
+    } else {
+      iconEl.src = icon;
+    }
+  } else {
+    // Built-in icon - restore SVG if needed
+    const svgIcons = {
+      search: '<circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>',
+      home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+      folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+      objective: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+      web: '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'
+    };
+
+    const svgContent = svgIcons[icon] || svgIcons.search;
+
+    if (iconEl.tagName === 'IMG') {
+      // Replace img with SVG
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'global-nav-icon');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '1.5');
+      svg.innerHTML = svgContent;
+      iconEl.replaceWith(svg);
+    } else {
+      iconEl.innerHTML = svgContent;
+    }
+  }
+}
+
 export default {
   init,
   setCallbacks,
   setUrl,
+  setIcon,
   clear,
   updateFromSelection
 };

@@ -249,6 +249,22 @@ body.platform-darwin.fullscreen #header {
   margin-left: 8px;
 }
 
+/* Hover trigger zone - appears on left edge when collapsed */
+#sidebar-hover-trigger {
+  display: none;
+}
+
+#app.sidebar-collapsed #sidebar-hover-trigger {
+  display: block;
+  position: fixed;
+  top: 36px;
+  left: 0;
+  width: 8px;
+  height: calc(100vh - 36px);
+  z-index: 100;
+  cursor: pointer;
+}
+
 /* ========================================
    Side List (left sidebar)
    ======================================== */
@@ -739,6 +755,11 @@ body.light-mode .web-search-dropdown {
   color: var(--text-dim);
 }
 
+.global-nav-favicon {
+  border-radius: 2px;
+  object-fit: contain;
+}
+
 .global-nav-input {
   flex: 1;
   padding: 0;
@@ -879,8 +900,31 @@ body.light-mode .web-search-dropdown {
   transition: all 0.15s ease;
 }
 
+.tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.tab-icon svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+}
+
+.tab-icon img {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  object-fit: contain;
+}
+
 .tab-title {
-  max-width: 160px;
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

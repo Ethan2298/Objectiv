@@ -180,22 +180,69 @@ export function renderWebView() {
 
   body.innerHTML = `
     <div class="web-view">
-      <webview class="web-browser-frame" src="about:blank"></webview>
+      <webview class="web-browser-frame" src="about:blank" allowpopups></webview>
     </div>
   `;
 
   const webview = body.querySelector('.web-browser-frame');
   const GlobalNav = window.Objectiv?.GlobalNav;
 
+  // Helper to update tab from webview state
+  const updateTabFromWebview = () => {
+    const Tabs = window.Objectiv?.Tabs;
+    if (!Tabs) return;
+
+    // Update title
+    try {
+      const title = webview.getTitle?.();
+      if (title && title !== 'about:blank') {
+        Tabs.updateActiveTabTitle(title);
+      }
+    } catch (e) { /* ignore */ }
+  };
+
   // Update global nav bar when navigation occurs
   webview.addEventListener('did-navigate', (e) => {
     GlobalNav?.setUrl?.(e.url);
+    updateTabFromWebview();
   });
 
   webview.addEventListener('did-navigate-in-page', (e) => {
     if (e.isMainFrame) {
       GlobalNav?.setUrl?.(e.url);
+      updateTabFromWebview();
     }
+  });
+
+  // Update tab title when page title changes
+  webview.addEventListener('page-title-updated', (e) => {
+    const Tabs = window.Objectiv?.Tabs;
+    const title = e.title;
+    if (title && Tabs) {
+      Tabs.updateActiveTabTitle(title);
+    }
+  });
+
+  // Update tab icon and nav icon when favicon changes
+  webview.addEventListener('page-favicon-updated', (e) => {
+    const Tabs = window.Objectiv?.Tabs;
+    const favicons = e.favicons || [];
+    if (favicons.length > 0) {
+      if (Tabs) {
+        Tabs.updateActiveTabIcon(favicons[0]);
+      }
+      GlobalNav?.setIcon?.(favicons[0]);
+    }
+  });
+
+  // Update title after page loads (most reliable fallback)
+  webview.addEventListener('did-finish-load', () => {
+    updateTabFromWebview();
+  });
+
+  // Also try after DOM is ready
+  webview.addEventListener('dom-ready', () => {
+    updateTabFromWebview();
   });
 }
 

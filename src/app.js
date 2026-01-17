@@ -90,7 +90,8 @@ window.Objectiv = {
   SideList,
   ContentView,
   NextStepTimer,
-  GlobalNav
+  GlobalNav,
+  Tabs
 };
 
 // ========================================
@@ -165,16 +166,22 @@ function saveData() {
 }
 
 /**
- * Update active tab title based on current selection
+ * Update active tab title and icon based on current selection
  */
 function updateTabTitleFromSelection() {
   const selection = TabState.getSelection();
   const viewMode = AppState.getViewMode();
 
   let title = 'Objectiv';
+  let icon = 'home';
 
   if (selection.type === 'home') {
     title = 'Home';
+    icon = 'home';
+  } else if (selection.type === 'web') {
+    // Web view - title/icon will be updated by webview events
+    title = 'Web';
+    icon = 'web';
   } else if (selection.type === 'objective' && selection.id) {
     // Look up objective by ID from data
     const objectives = AppState.getObjectives();
@@ -182,6 +189,7 @@ function updateTabTitleFromSelection() {
     if (objective) {
       title = objective.name || 'Untitled';
     }
+    icon = 'objective';
   } else if (selection.type === 'folder' && selection.id) {
     // Look up folder by ID from data
     const folders = AppState.getFolders();
@@ -189,11 +197,14 @@ function updateTabTitleFromSelection() {
     if (folder) {
       title = folder.name || 'Folder';
     }
+    icon = 'folder';
   } else if (viewMode === 'empty' || !selection.id) {
     title = 'Objectiv';
+    icon = 'home';
   }
 
   Tabs.updateActiveTabTitle(title);
+  Tabs.updateActiveTabIcon(icon);
 }
 
 /**
