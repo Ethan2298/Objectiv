@@ -1050,8 +1050,8 @@
           item.dataset.folderId = itemData.folderId;
 
           const folderIcon = isExpanded
-            ? '<svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5Z"/><path d="M3 10h18"/></svg>'
-            : '<svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5Z"/></svg>';
+            ? '<svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>'
+            : '<svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
 
           item.innerHTML = `
             ${folderIcon}<span class="folder-name">${itemData.name || 'Unnamed Folder'}</span>${indicator}
@@ -1121,7 +1121,7 @@
         case ItemType.ADD_FOLDER:
           item.className = 'side-item add-option add-folder' + (isSelected ? ' selected' : '');
           item.dataset.type = 'add-folder';
-          item.innerHTML = `<svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 10v6m-3-3h6"/><path d="M5 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5Z"/></svg><span class="side-item-name">Add folder</span>${indicator}`;
+          item.innerHTML = `<span class="side-item-name">+ Add folder</span>${indicator}`;
           item.onclick = () => startAddFolder();
           break;
 

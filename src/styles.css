@@ -1701,6 +1701,63 @@ body.light-mode .side-item.folder-row.selected {
   color: #000;
 }
 
+/* Objective row - align with folder names */
+.side-item[data-type="objective"] {
+  padding-left: 28px; /* 8px base + 14px icon + 6px margin */
+}
+
+/* Objectives inside folders - add indentation (8px per level like VS Code) */
+.side-item[data-type="objective"][data-depth="1"] { padding-left: 36px; }
+.side-item[data-type="objective"][data-depth="2"] { padding-left: 44px; }
+.side-item[data-type="objective"][data-depth="3"] { padding-left: 52px; }
+.side-item[data-type="objective"][data-depth="4"] { padding-left: 60px; }
+
+/* Indent guide lines - centered under parent chevron */
+/* Depth 0 chevron center: 8px padding + 7px (half of 14px icon) = 15px */
+/* Each depth adds 8px */
+.side-item[data-depth="1"]::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.side-item[data-depth="2"]::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  box-shadow: 8px 0 0 var(--border);
+}
+
+.side-item[data-depth="3"]::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  box-shadow: 8px 0 0 var(--border), 16px 0 0 var(--border);
+}
+
+.side-item[data-depth="4"]::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  box-shadow: 8px 0 0 var(--border), 16px 0 0 var(--border), 24px 0 0 var(--border);
+}
+
 /* Folder chevron */
 .folder-chevron {
   display: inline-block;
@@ -1737,12 +1794,12 @@ body.light-mode .side-item.folder-row.selected {
   caret-color: var(--accent);
 }
 
-/* Depth-based indentation (12px per level) */
-.side-item[data-depth="1"] { padding-left: 20px; }
-.side-item[data-depth="2"] { padding-left: 32px; }
-.side-item[data-depth="3"] { padding-left: 44px; }
-.side-item[data-depth="4"] { padding-left: 56px; }
-.side-item[data-depth="5"] { padding-left: 68px; }
+/* Depth-based indentation (8px per level like VS Code) */
+.side-item[data-depth="1"] { padding-left: 16px; }
+.side-item[data-depth="2"] { padding-left: 24px; }
+.side-item[data-depth="3"] { padding-left: 32px; }
+.side-item[data-depth="4"] { padding-left: 40px; }
+.side-item[data-depth="5"] { padding-left: 48px; }
 
 /* Drag and Drop States */
 .side-item.dragging {
