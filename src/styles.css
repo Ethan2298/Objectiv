@@ -26,6 +26,18 @@ body.light-mode {
   --accent: #f97316;
 }
 
+body.solarized-mode {
+  --bg: #fdf6e3;           /* Base3 - cream/yellow background */
+  --bg-subtle: #eee8d5;    /* Base2 - slightly darker cream */
+  --bg-hover: rgba(0, 0, 0, 0.07);
+  --text: #657b83;         /* Base00 - body text */
+  --text-muted: #839496;   /* Base0 - secondary text */
+  --text-dim: #93a1a1;     /* Base1 - tertiary text */
+  --text-faint: #93a1a1;   /* Base1 */
+  --border: #eee8d5;       /* Base2 - subtle borders */
+  --accent: #cb4b16;       /* Solarized orange */
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -337,6 +349,10 @@ body.platform-darwin.fullscreen #header {
 
 body.light-mode .side-item.selected {
   color: #000;
+}
+
+body.solarized-mode .side-item.selected {
+  color: #073642; /* Base02 - darker text for selection */
 }
 
 .side-item.editing {
@@ -666,6 +682,10 @@ body.light-mode .side-item.selected {
 }
 
 body.light-mode .web-search-dropdown {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+body.solarized-mode .web-search-dropdown {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
@@ -1045,6 +1065,24 @@ body.light-mode .tab-close:hover {
 }
 
 body.light-mode .tab-add:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+body.solarized-mode .header-tab {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+body.solarized-mode .header-tab.active {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+body.solarized-mode .tab-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+body.solarized-mode .tab-add:hover {
   background: rgba(0, 0, 0, 0.1);
 }
 
@@ -1475,23 +1513,103 @@ body.light-mode .tab-add:hover {
   font-size: 13px;
 }
 
-/* Theme Toggle */
-#theme-toggle {
+/* Settings Button */
+#settings-btn {
   position: absolute;
   bottom: 8px;
   right: 8px;
   background: none;
   border: none;
   color: var(--text-faint);
-  font-size: 16px;
   cursor: pointer;
   padding: 8px;
   line-height: 1;
   transition: color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#theme-toggle:hover {
+#settings-btn:hover {
   color: var(--text-muted);
+}
+
+#settings-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ========================================
+   Settings View
+   ======================================== */
+
+.settings-view {
+  padding: 1.5rem 2rem;
+  max-width: 600px;
+}
+
+.settings-view h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.settings-view .settings-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+.settings-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+}
+
+.settings-item-label {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.settings-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  min-width: 120px;
+}
+
+.settings-select:hover {
+  border-color: var(--text-secondary);
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: var(--accent-color);
 }
 
 /* ========================================
@@ -1606,6 +1724,11 @@ svg.folder-icon {
 body.light-mode .side-item.folder-item.selected,
 body.light-mode .side-item.file-item.selected {
   color: #000;
+}
+
+body.solarized-mode .side-item.folder-item.selected,
+body.solarized-mode .side-item.file-item.selected {
+  color: #073642;
 }
 
 .file-icon {
@@ -2154,6 +2277,26 @@ body.light-mode .excel-table tbody tr:hover td {
   background: #f8f8f8;
 }
 
+/* Solarized mode adjustments */
+body.solarized-mode .excel-table th,
+body.solarized-mode .excel-table td {
+  border-color: #eee8d5;
+}
+
+body.solarized-mode .excel-row-header,
+body.solarized-mode .excel-col-header,
+body.solarized-mode .excel-table thead tr th:first-child {
+  background: #eee8d5;
+}
+
+body.solarized-mode .excel-table tbody td {
+  background: #fdf6e3;
+}
+
+body.solarized-mode .excel-table tbody tr:hover td {
+  background: #eee8d5;
+}
+
 /* ========================================
    MOBILE RESPONSIVE STYLES
    ======================================== */
@@ -2240,6 +2383,9 @@ body.light-mode .excel-table tbody tr:hover td {
   }
   body.light-mode .side-item {
     color: #000;
+  }
+  body.solarized-mode .side-item {
+    color: #073642;
   }
 
   /* Hide desktop-only elements */
@@ -2381,6 +2527,10 @@ body.light-mode .excel-table tbody tr:hover td {
 
 body.light-mode .side-item.folder-row.selected {
   color: #000;
+}
+
+body.solarized-mode .side-item.folder-row.selected {
+  color: #073642;
 }
 
 /* Objective row - icon included in HTML, align with Home/Web */
@@ -2644,6 +2794,33 @@ body.light-mode .modal-content p {
   color: #888 !important;
 }
 
+body.solarized-mode .modal-overlay {
+  background: rgba(253, 246, 227, 0.95);
+}
+
+body.solarized-mode .modal-content {
+  background: #fdf6e3;
+  border-color: #eee8d5;
+}
+
+body.solarized-mode .modal-content h2 {
+  color: #073642 !important;
+}
+
+body.solarized-mode .modal-content input {
+  background: #eee8d5 !important;
+  color: #073642 !important;
+  border-color: #eee8d5 !important;
+}
+
+body.solarized-mode .modal-content label {
+  color: #839496 !important;
+}
+
+body.solarized-mode .modal-content p {
+  color: #93a1a1 !important;
+}
+
 /* ========================================
    Context Menu
    ======================================== */
@@ -2700,6 +2877,16 @@ body.light-mode .context-menu {
 
 body.light-mode .context-menu-separator {
   background: #eee;
+}
+
+body.solarized-mode .context-menu {
+  background: #fdf6e3;
+  border-color: #eee8d5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+body.solarized-mode .context-menu-separator {
+  background: #eee8d5;
 }
 
 /* ========================================
@@ -2902,6 +3089,23 @@ body.light-mode .delete-modal-btn.cancel {
 
 body.light-mode .delete-modal-btn.cancel:hover {
   border-color: #ccc;
+}
+
+body.solarized-mode .delete-modal-input {
+  background: #eee8d5;
+  border-color: #eee8d5;
+}
+
+body.solarized-mode .delete-modal-input:focus {
+  border-color: #ff5555;
+}
+
+body.solarized-mode .delete-modal-btn.cancel {
+  border-color: #eee8d5;
+}
+
+body.solarized-mode .delete-modal-btn.cancel:hover {
+  border-color: #d0cabb;
 }
 
 /* ========================================

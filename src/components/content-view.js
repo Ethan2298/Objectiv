@@ -106,6 +106,8 @@ export function renderContentView() {
     renderWebView();
   } else if (viewMode === 'folder') {
     renderFolderView();
+  } else if (viewMode === 'settings') {
+    renderSettingsView();
   } else {
     renderObjectiveView();
   }
@@ -393,6 +395,60 @@ export function renderFolderView() {
   }
 }
 
+/**
+ * Render settings view
+ */
+export function renderSettingsView() {
+  const contentPage = document.getElementById('content-page');
+  const headerTitle = document.getElementById('content-header-title');
+  const headerDesc = document.getElementById('content-header-description');
+  const body = document.getElementById('content-body');
+  const app = document.getElementById('app');
+
+  if (!headerTitle || !body) return;
+
+  // Remove web-mode if present
+  if (contentPage) contentPage.classList.remove('web-mode');
+  if (app) app.classList.remove('web-mode');
+
+  headerTitle.textContent = 'Settings';
+  if (headerDesc) headerDesc.textContent = '';
+
+  // Get current theme
+  const Platform = window.Objectiv?.Platform;
+  const currentTheme = Platform?.getCurrentTheme?.() || 'dark';
+
+  body.innerHTML = `
+    <div class="settings-view">
+      <h1>Settings</h1>
+      <p class="settings-subtitle">Customize your Objectiv experience</p>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Appearance</div>
+        <div class="settings-item">
+          <span class="settings-item-label">Theme</span>
+          <select id="theme-select" class="settings-select">
+            <option value="dark"${currentTheme === 'dark' ? ' selected' : ''}>Dark</option>
+            <option value="light"${currentTheme === 'light' ? ' selected' : ''}>Light</option>
+            <option value="solarized"${currentTheme === 'solarized' ? ' selected' : ''}>Solarized</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Add event listener for theme change
+  const themeSelect = body.querySelector('#theme-select');
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (e) => {
+      const newTheme = e.target.value;
+      if (Platform?.setTheme) {
+        Platform.setTheme(newTheme);
+      }
+    });
+  }
+}
+
 // ========================================
 // Section Render Functions
 // ========================================
@@ -589,6 +645,7 @@ export default {
   renderObjectiveView,
   renderWebView,
   renderFolderView,
+  renderSettingsView,
   renderContentPriorities,
   renderContentSteps,
   startHoverPreview,

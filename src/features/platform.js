@@ -67,24 +67,110 @@ export function initPinProtection() {
 }
 
 // ========================================
-// Theme Toggle
+// Theme Management
 // ========================================
 
-export function initThemeToggle() {
-  const toggle = document.getElementById('theme-toggle');
-  if (!toggle) return;
-
+/**
+ * Apply saved theme on page load
+ */
+export function applyStoredTheme() {
   const stored = localStorage.getItem('objectiv-theme');
+  // Remove both mode classes first
+  document.body.classList.remove('light-mode', 'solarized-mode');
+
   if (stored === 'light') {
     document.body.classList.add('light-mode');
-    toggle.textContent = '\u263E'; // Moon symbol
+  } else if (stored === 'solarized') {
+    document.body.classList.add('solarized-mode');
+  }
+  // 'dark' is the default (no class needed)
+}
+
+/**
+ * Get current theme
+ * @returns {'light' | 'dark' | 'solarized'}
+ */
+export function getCurrentTheme() {
+  if (document.body.classList.contains('light-mode')) return 'light';
+  if (document.body.classList.contains('solarized-mode')) return 'solarized';
+  return 'dark';
+}
+
+/**
+ * Set theme
+ * @param {'light' | 'dark' | 'solarized'} theme
+ */
+export function setTheme(theme) {
+  // Remove both mode classes first
+  document.body.classList.remove('light-mode', 'solarized-mode');
+
+  if (theme === 'light') {
+    document.body.classList.add('light-mode');
+  } else if (theme === 'solarized') {
+    document.body.classList.add('solarized-mode');
+  }
+  // 'dark' is the default (no class needed)
+  localStorage.setItem('objectiv-theme', theme);
+}
+
+// ========================================
+// Settings Button
+// ========================================
+
+/**
+ * Initialize settings button
+ */
+export function initSettingsButton() {
+  const btn = document.getElementById('settings-btn');
+  if (!btn) return;
+
+  // Apply saved theme on load
+  applyStoredTheme();
+
+  // Open settings tab on click
+  btn.addEventListener('click', openSettingsTab);
+}
+
+/**
+ * Open settings tab (or switch to existing settings tab)
+ */
+export function openSettingsTab() {
+  const TabState = window.Objectiv?.TabState;
+  const SideListState = window.Objectiv?.SideListState;
+
+  if (!TabState) return;
+
+  // Check if there's already a settings tab open
+  const tabIds = TabState.getTabIds();
+  for (const tabId of tabIds) {
+    const tab = TabState.getTabById(tabId);
+    if (tab && tab.selection && tab.selection.type === 'settings') {
+      // Switch to existing settings tab
+      TabState.switchTab(tabId);
+
+      // Update DOM active class
+      const tabs = document.querySelectorAll('.header-tab');
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.tabId === tabId));
+
+      // Trigger view update
+      const updateView = window.Objectiv?.updateView;
+      if (updateView) updateView();
+      return;
+    }
   }
 
-  toggle.addEventListener('click', () => {
-    const isLight = document.body.classList.toggle('light-mode');
-    toggle.textContent = isLight ? '\u263E' : '\u2600'; // Moon or Sun
-    localStorage.setItem('objectiv-theme', isLight ? 'light' : 'dark');
-  });
+  // No existing settings tab - update current tab to settings view
+  AppState.setViewMode('settings');
+  TabState.setSelection('settings', 'settings');
+
+  // Clear side list selection by setting index to -1
+  if (SideListState && SideListState.setSelectedIndex) {
+    SideListState.setSelectedIndex(-1);
+  }
+
+  // Trigger view update
+  const updateView = window.Objectiv?.updateView;
+  if (updateView) updateView();
 }
 
 // ========================================
@@ -207,7 +293,7 @@ export function init() {
 
   // Initialize features
   initPinProtection();
-  initThemeToggle();
+  initSettingsButton();
   initStatusReporter();
   initWindowControls();
   initZoomPrevention();
@@ -221,7 +307,11 @@ export default {
   isElectron,
   isBrowser,
   initPinProtection,
-  initThemeToggle,
+  applyStoredTheme,
+  getCurrentTheme,
+  setTheme,
+  initSettingsButton,
+  openSettingsTab,
   updateStatusReporter,
   toggleStatusReporter,
   initStatusReporter,
