@@ -3,8 +3,8 @@
    ======================================== */
 
 :root {
-  --bg: #020203;
-  --bg-subtle: #070708;
+  --bg: #1a1919;
+  --bg-subtle: #212020;
   --bg-hover: rgba(255, 255, 255, 0.1);
   --text: #e0e0e0;
   --text-muted: #888;
@@ -208,7 +208,7 @@ body.platform-darwin #btn-close {
   align-items: center;
   height: 36px;
   background: var(--bg);
-  padding: 3px 8px;
+  padding: 3px 8px 0;
   z-index: 5;
   -webkit-app-region: drag; /* Make header draggable */
 }
@@ -927,7 +927,8 @@ body.light-mode .web-search-dropdown {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 12px;
+  height: 30px;
+  padding: 0 12px;
   width: 200px;
   font-size: 12px;
   color: var(--text-muted);
@@ -1067,7 +1068,7 @@ body.light-mode .tab-add:hover {
   width: calc(100% - 80px);
   margin: 0 40px;
   background: transparent;
-  padding: 80px 96px 96px 96px;
+  padding: 96px;
   flex-shrink: 0;
 }
 
@@ -1476,20 +1477,17 @@ body.light-mode .tab-add:hover {
 
 /* Theme Toggle */
 #theme-toggle {
-  position: fixed;
-  bottom: 12px;
-  right: 12px;
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
   background: none;
   border: none;
   color: var(--text-faint);
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
-  padding: 12px;
-  min-width: 44px;
-  min-height: 44px;
+  padding: 8px;
   line-height: 1;
   transition: color 0.15s;
-  z-index: 100;
 }
 
 #theme-toggle:hover {
