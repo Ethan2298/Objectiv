@@ -2,9 +2,12 @@
  * Content View Component
  *
  * Renders the main content area (objective details, folder view).
+ * Uses persistent containers per tab for browser-like behavior.
  */
 
 import AppState from '../state/app-state.js';
+import * as TabState from '../state/tab-state.js';
+import * as TabContentManager from '../state/tab-content-manager.js';
 import { formatTimestamp, formatDuration } from '../utils.js';
 import { renderContentNextStep } from './next-step-timer.js';
 import GlobalNav from './global-nav.js';
@@ -96,37 +99,83 @@ function createConfirmRow(text) {
 
 /**
  * Render the content view (selected objective, folder, or home)
+ * Uses persistent containers per tab for browser-like behavior.
  */
 export function renderContentView() {
-  const viewMode = AppState.getViewMode();
+  const activeTabId = TabState.getActiveTabId();
+  // Get view mode from TabState (per-tab) not AppState (global)
+  // This ensures switching tabs restores the correct view
+  const viewMode = TabState.getViewMode() || AppState.getViewMode();
 
-  if (viewMode === 'home') {
-    renderHomeView();
-  } else if (viewMode === 'web') {
-    renderWebView();
-  } else if (viewMode === 'folder') {
-    renderFolderView();
-  } else if (viewMode === 'settings') {
-    renderSettingsView();
-  } else {
-    renderObjectiveView();
+  // Sync AppState with tab's view mode (keeps them in sync)
+  if (viewMode && viewMode !== AppState.getViewMode()) {
+    AppState.setViewMode(viewMode);
   }
+
+  // Hide all containers first
+  TabContentManager.hideAllContainers();
+
+  // Get or create this tab's container
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+  const existingMode = TabContentManager.getContainerViewMode(activeTabId);
+
+  // For web view, only re-render if:
+  // 1. Container is empty/new (no existing mode)
+  // 2. View mode changed (e.g., from home to web)
+  // For other views, always re-render (they update based on selection)
+  const shouldReRender = viewMode !== 'web' || existingMode !== viewMode;
+
+  // Handle web-mode CSS class and header (needed even when not re-rendering)
+  const contentPage = document.getElementById('content-page');
+  const app = document.getElementById('app');
+  const headerTitle = document.getElementById('content-header-title');
+  const headerDesc = document.getElementById('content-header-description');
+
+  if (viewMode === 'web') {
+    contentPage?.classList.add('web-mode');
+    app?.classList.add('web-mode');
+    // Update header for web view (even if not re-rendering)
+    if (headerTitle) headerTitle.textContent = 'Web';
+    if (headerDesc) headerDesc.textContent = '';
+  } else {
+    contentPage?.classList.remove('web-mode');
+    app?.classList.remove('web-mode');
+  }
+
+  if (shouldReRender) {
+    TabContentManager.setContainerViewMode(activeTabId, viewMode);
+
+    if (viewMode === 'home') {
+      renderHomeViewInContainer(container);
+    } else if (viewMode === 'web') {
+      renderWebViewInContainer(container);
+    } else if (viewMode === 'folder') {
+      renderFolderViewInContainer(container);
+    } else if (viewMode === 'settings') {
+      renderSettingsViewInContainer(container);
+    } else {
+      renderObjectiveViewInContainer(container);
+    }
+  }
+
+  // Show this tab's container
+  TabContentManager.showContainer(activeTabId);
 
   // Update nav bar to reflect current selection
   GlobalNav.updateFromSelection();
 }
 
 /**
- * Render home view
+ * Render home view into a container
+ * @param {HTMLElement} container - The container to render into
  */
-export function renderHomeView() {
+function renderHomeViewInContainer(container) {
   const contentPage = document.getElementById('content-page');
   const headerTitle = document.getElementById('content-header-title');
   const headerDesc = document.getElementById('content-header-description');
-  const body = document.getElementById('content-body');
   const app = document.getElementById('app');
 
-  if (!headerTitle || !body) return;
+  if (!headerTitle) return;
 
   // Remove web-mode if present
   if (contentPage) contentPage.classList.remove('web-mode');
@@ -139,7 +188,7 @@ export function renderHomeView() {
   const objectiveCount = data.objectives.length;
   const folderCount = data.folders.length;
 
-  body.innerHTML = `
+  container.innerHTML = `
     <div class="home-view">
       <div class="home-stats">
         <div class="home-stat">
@@ -156,16 +205,26 @@ export function renderHomeView() {
 }
 
 /**
- * Render web view with embedded browser
+ * Render home view (backward compatibility wrapper)
  */
-export function renderWebView() {
+export function renderHomeView() {
+  const activeTabId = TabState.getActiveTabId();
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+  renderHomeViewInContainer(container);
+  TabContentManager.setContainerViewMode(activeTabId, 'home');
+}
+
+/**
+ * Render web view with embedded browser into a container
+ * @param {HTMLElement} container - The container to render into
+ */
+function renderWebViewInContainer(container) {
   const contentPage = document.getElementById('content-page');
   const headerTitle = document.getElementById('content-header-title');
   const headerDesc = document.getElementById('content-header-description');
-  const body = document.getElementById('content-body');
   const app = document.getElementById('app');
 
-  if (!headerTitle || !body) return;
+  if (!headerTitle) return;
 
   // Apply web-mode for full-screen browser
   if (contentPage) {
@@ -180,39 +239,52 @@ export function renderWebView() {
   headerTitle.textContent = 'Web';
   if (headerDesc) headerDesc.textContent = '';
 
-  body.innerHTML = `
+  // IMPORTANT: Capture the tab ID at creation time
+  // This ensures webview events update THIS tab, not whatever tab is active when the event fires
+  const ownerTabId = TabState.getActiveTabId();
+
+  container.innerHTML = `
     <div class="web-view">
       <webview class="web-browser-frame" src="about:blank" allowpopups></webview>
     </div>
   `;
 
-  const webview = body.querySelector('.web-browser-frame');
+  const webview = container.querySelector('.web-browser-frame');
   const GlobalNav = window.Objectiv?.GlobalNav;
 
-  // Helper to update tab from webview state
-  const updateTabFromWebview = () => {
+  // Helper to update the OWNER tab from webview state (not the active tab)
+  const updateOwnerTab = () => {
     const Tabs = window.Objectiv?.Tabs;
     if (!Tabs) return;
 
-    // Update title
+    // Update title for the tab that owns this webview
     try {
       const title = webview.getTitle?.();
       if (title && title !== 'about:blank') {
-        Tabs.updateActiveTabTitle(title);
+        Tabs.updateTabTitleById(ownerTabId, title);
       }
     } catch (e) { /* ignore */ }
   };
 
-  // Update global nav bar when navigation occurs
+  // Check if this webview's tab is currently active
+  const isOwnerTabActive = () => {
+    return TabState.getActiveTabId() === ownerTabId;
+  };
+
+  // Update global nav bar when navigation occurs (only if this tab is active)
   webview.addEventListener('did-navigate', (e) => {
-    GlobalNav?.setUrl?.(e.url);
-    updateTabFromWebview();
+    if (isOwnerTabActive()) {
+      GlobalNav?.setUrl?.(e.url);
+    }
+    updateOwnerTab();
   });
 
   webview.addEventListener('did-navigate-in-page', (e) => {
     if (e.isMainFrame) {
-      GlobalNav?.setUrl?.(e.url);
-      updateTabFromWebview();
+      if (isOwnerTabActive()) {
+        GlobalNav?.setUrl?.(e.url);
+      }
+      updateOwnerTab();
     }
   });
 
@@ -220,8 +292,15 @@ export function renderWebView() {
   webview.addEventListener('page-title-updated', (e) => {
     const Tabs = window.Objectiv?.Tabs;
     const title = e.title;
-    if (title && Tabs) {
-      Tabs.updateActiveTabTitle(title);
+    if (title) {
+      if (Tabs) {
+        // Update the OWNER tab, not the active tab
+        Tabs.updateTabTitleById(ownerTabId, title);
+      }
+      // Only update GlobalNav if this tab is active
+      if (isOwnerTabActive()) {
+        GlobalNav?.setPageTitle?.(title);
+      }
     }
   });
 
@@ -231,34 +310,52 @@ export function renderWebView() {
     const favicons = e.favicons || [];
     if (favicons.length > 0) {
       if (Tabs) {
-        Tabs.updateActiveTabIcon(favicons[0]);
+        // Update the OWNER tab's icon, not the active tab
+        Tabs.updateTabIconById(ownerTabId, favicons[0]);
       }
-      GlobalNav?.setIcon?.(favicons[0]);
+      // Only update GlobalNav if this tab is active
+      if (isOwnerTabActive()) {
+        GlobalNav?.setIcon?.(favicons[0]);
+        GlobalNav?.setFavicon?.(favicons[0]);
+      }
     }
   });
 
   // Update title after page loads (most reliable fallback)
   webview.addEventListener('did-finish-load', () => {
-    updateTabFromWebview();
+    updateOwnerTab();
   });
 
   // Also try after DOM is ready
   webview.addEventListener('dom-ready', () => {
-    updateTabFromWebview();
+    updateOwnerTab();
   });
+
+  // Note: New window/tab handling (target="_blank" links) is done in main.js
+  // via setWindowOpenHandler on the webview's webContents
 }
 
 /**
- * Render objective view
+ * Render web view (backward compatibility wrapper)
  */
-export function renderObjectiveView() {
+export function renderWebView() {
+  const activeTabId = TabState.getActiveTabId();
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+  renderWebViewInContainer(container);
+  TabContentManager.setContainerViewMode(activeTabId, 'web');
+}
+
+/**
+ * Render objective view into a container
+ * @param {HTMLElement} container - The container to render into
+ */
+function renderObjectiveViewInContainer(container) {
   const contentPage = document.getElementById('content-page');
   const headerTitle = document.getElementById('content-header-title');
   const headerDesc = document.getElementById('content-header-description');
-  const body = document.getElementById('content-body');
   const app = document.getElementById('app');
 
-  if (!headerTitle || !body) return;
+  if (!headerTitle) return;
 
   // Remove web-mode if present
   if (contentPage) contentPage.classList.remove('web-mode');
@@ -270,7 +367,7 @@ export function renderObjectiveView() {
   if (data.objectives.length === 0) {
     headerTitle.textContent = 'No objectives yet';
     if (headerDesc) headerDesc.textContent = 'Add your first objective to get started';
-    body.innerHTML = '';
+    container.innerHTML = '';
     return;
   }
 
@@ -289,10 +386,10 @@ export function renderObjectiveView() {
   if (headerDesc) headerDesc.textContent = obj.description || '';
 
   // Render priorities, next step, and steps
-  body.innerHTML = '';
-  renderContentPriorities(body, obj);
-  renderContentNextStep(body, obj);
-  renderContentSteps(body, obj);
+  container.innerHTML = '';
+  renderContentPriorities(container, obj);
+  renderContentNextStep(container, obj);
+  renderContentSteps(container, obj);
 
   // Refresh clarity scores (if enabled)
   _refreshClarity(obj);
@@ -300,9 +397,20 @@ export function renderObjectiveView() {
 }
 
 /**
- * Render folder view
+ * Render objective view (backward compatibility wrapper)
  */
-export function renderFolderView() {
+export function renderObjectiveView() {
+  const activeTabId = TabState.getActiveTabId();
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+  renderObjectiveViewInContainer(container);
+  TabContentManager.setContainerViewMode(activeTabId, 'objective');
+}
+
+/**
+ * Render folder view into a container
+ * @param {HTMLElement} container - The container to render into
+ */
+function renderFolderViewInContainer(container) {
   const SideListState = window.Objectiv?.SideListState;
   const selectedItem = SideListState?.getSelectedItem();
   const folder = selectedItem?.data;
@@ -310,10 +418,9 @@ export function renderFolderView() {
   const contentPage = document.getElementById('content-page');
   const headerTitle = document.getElementById('content-header-title');
   const headerDesc = document.getElementById('content-header-description');
-  const body = document.getElementById('content-body');
   const app = document.getElementById('app');
 
-  if (!headerTitle || !body) return;
+  if (!headerTitle) return;
 
   // Remove web-mode if present
   if (contentPage) contentPage.classList.remove('web-mode');
@@ -322,7 +429,7 @@ export function renderFolderView() {
   if (!folder) {
     headerTitle.textContent = 'Select a folder';
     if (headerDesc) headerDesc.textContent = '';
-    body.innerHTML = '';
+    container.innerHTML = '';
     return;
   }
 
@@ -338,7 +445,7 @@ export function renderFolderView() {
       : `${folderObjectives.length} objectives`;
   }
 
-  body.innerHTML = '';
+  container.innerHTML = '';
 
   // Render objectives list
   if (folderObjectives.length === 0) {
@@ -346,12 +453,12 @@ export function renderFolderView() {
     emptyState.className = 'folder-empty-state';
     emptyState.style.cssText = 'color: var(--text-secondary); padding: 2rem 0; text-align: center;';
     emptyState.textContent = 'No objectives in this folder';
-    body.appendChild(emptyState);
+    container.appendChild(emptyState);
   } else {
     const header = document.createElement('div');
     header.className = 'section-header';
     header.textContent = 'OBJECTIVES';
-    body.appendChild(header);
+    container.appendChild(header);
 
     folderObjectives.forEach((obj) => {
       const objectiveItem = document.createElement('div');
@@ -390,22 +497,32 @@ export function renderFolderView() {
         }
       };
 
-      body.appendChild(objectiveItem);
+      container.appendChild(objectiveItem);
     });
   }
 }
 
 /**
- * Render settings view
+ * Render folder view (backward compatibility wrapper)
  */
-export function renderSettingsView() {
+export function renderFolderView() {
+  const activeTabId = TabState.getActiveTabId();
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+  renderFolderViewInContainer(container);
+  TabContentManager.setContainerViewMode(activeTabId, 'folder');
+}
+
+/**
+ * Render settings view into a container
+ * @param {HTMLElement} container - The container to render into
+ */
+function renderSettingsViewInContainer(container) {
   const contentPage = document.getElementById('content-page');
   const headerTitle = document.getElementById('content-header-title');
   const headerDesc = document.getElementById('content-header-description');
-  const body = document.getElementById('content-body');
   const app = document.getElementById('app');
 
-  if (!headerTitle || !body) return;
+  if (!headerTitle) return;
 
   // Remove web-mode if present
   if (contentPage) contentPage.classList.remove('web-mode');
@@ -418,7 +535,7 @@ export function renderSettingsView() {
   const Platform = window.Objectiv?.Platform;
   const currentTheme = Platform?.getCurrentTheme?.() || 'dark';
 
-  body.innerHTML = `
+  container.innerHTML = `
     <div class="settings-view">
       <h1>Settings</h1>
       <p class="settings-subtitle">Customize your Objectiv experience</p>
@@ -438,7 +555,7 @@ export function renderSettingsView() {
   `;
 
   // Add event listener for theme change
-  const themeSelect = body.querySelector('#theme-select');
+  const themeSelect = container.querySelector('#theme-select');
   if (themeSelect) {
     themeSelect.addEventListener('change', (e) => {
       const newTheme = e.target.value;
@@ -447,6 +564,16 @@ export function renderSettingsView() {
       }
     });
   }
+}
+
+/**
+ * Render settings view (backward compatibility wrapper)
+ */
+export function renderSettingsView() {
+  const activeTabId = TabState.getActiveTabId();
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+  renderSettingsViewInContainer(container);
+  TabContentManager.setContainerViewMode(activeTabId, 'settings');
 }
 
 // ========================================
@@ -610,17 +737,20 @@ export function startHoverPreview(itemData) {
 
   const headerTitle = document.getElementById('content-header-title');
   const headerDesc = document.getElementById('content-header-description');
-  const body = document.getElementById('content-body');
 
-  if (!headerTitle || !body) return;
+  if (!headerTitle) return;
 
   headerTitle.textContent = obj.name;
   if (headerDesc) headerDesc.textContent = obj.description || '';
 
-  body.innerHTML = '';
-  renderContentPriorities(body, obj);
-  renderContentNextStep(body, obj);
-  renderContentSteps(body, obj);
+  // Get the active tab's container
+  const activeTabId = TabState.getActiveTabId();
+  const container = TabContentManager.getOrCreateContainer(activeTabId);
+
+  container.innerHTML = '';
+  renderContentPriorities(container, obj);
+  renderContentNextStep(container, obj);
+  renderContentSteps(container, obj);
 }
 
 /**

@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Fullscreen events
   onFullscreenChange: (callback) => ipcRenderer.on('fullscreen-change', (_, isFullscreen) => callback(isFullscreen)),
 
+  // New tab from webview (target="_blank" links)
+  onOpenUrlInNewTab: (callback) => ipcRenderer.on('open-url-in-new-tab', (_, url) => callback(url)),
+
   // Clarity scoring
   calculateClarity: (name, description) => ipcRenderer.invoke('calculate-clarity', name, description),
 

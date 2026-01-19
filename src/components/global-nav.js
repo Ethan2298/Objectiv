@@ -6,7 +6,10 @@
  */
 
 import AppState from '../state/app-state.js';
+import * as TabState from '../state/tab-state.js';
+import * as TabContentManager from '../state/tab-content-manager.js';
 import * as BookmarkStorage from '../data/bookmark-storage.js';
+import * as HistoryStorage from '../data/history-storage.js';
 
 // ========================================
 // State
@@ -89,7 +92,7 @@ export function init() {
     btnBack.addEventListener('click', () => {
       const viewMode = AppState.getViewMode();
       if (viewMode === 'web') {
-        const webview = document.querySelector('.web-browser-frame');
+        const webview = getActiveWebview();
         if (webview) webview.goBack();
       } else {
         // Use browser history for app navigation
@@ -102,7 +105,7 @@ export function init() {
     btnForward.addEventListener('click', () => {
       const viewMode = AppState.getViewMode();
       if (viewMode === 'web') {
-        const webview = document.querySelector('.web-browser-frame');
+        const webview = getActiveWebview();
         if (webview) webview.goForward();
       } else {
         // Use browser history for app navigation
@@ -115,7 +118,7 @@ export function init() {
     btnRefresh.addEventListener('click', () => {
       const viewMode = AppState.getViewMode();
       if (viewMode === 'web') {
-        const webview = document.querySelector('.web-browser-frame');
+        const webview = getActiveWebview();
         if (webview) webview.reload();
       } else {
         // Refresh the current view
@@ -123,6 +126,15 @@ export function init() {
       }
     });
   }
+}
+
+/**
+ * Get the webview for the currently active tab
+ * @returns {HTMLElement|null}
+ */
+function getActiveWebview() {
+  const activeTabId = TabState.getActiveTabId();
+  return TabContentManager.getWebview(activeTabId);
 }
 
 // ========================================
@@ -260,6 +272,38 @@ function getSearchResults(query) {
 
   if (!q) return results;
 
+  // Get history/common site suggestions (highest priority for URL bar)
+  const historySuggestions = HistoryStorage.getSuggestions(q, 5);
+  historySuggestions.forEach(item => {
+    results.push({
+      type: item.type === 'history' ? 'history' : 'suggestion',
+      url: item.url,
+      title: item.title,
+      faviconUrl: item.faviconUrl,
+      visitCount: item.visitCount || 0,
+      frecency: item.frecency || 0
+    });
+  });
+
+  // Search bookmarks
+  const bookmarks = BookmarkStorage.loadAllBookmarks();
+  const seenUrls = new Set(results.map(r => r.url));
+  bookmarks.forEach(bm => {
+    if (seenUrls.has(bm.url)) return;
+    const urlMatch = bm.url.toLowerCase().includes(q);
+    const titleMatch = bm.title.toLowerCase().includes(q);
+    if (urlMatch || titleMatch) {
+      results.push({
+        type: 'bookmark',
+        url: bm.url,
+        title: bm.title,
+        faviconUrl: bm.faviconUrl,
+        id: bm.id
+      });
+      seenUrls.add(bm.url);
+    }
+  });
+
   const data = AppState.getData();
 
   // Search objectives
@@ -316,11 +360,71 @@ function renderDropdown(results, query) {
   let html = '';
 
   // Group by type
+  const history = results.filter(r => r.type === 'history');
+  const suggestions = results.filter(r => r.type === 'suggestion');
+  const bookmarks = results.filter(r => r.type === 'bookmark');
   const objectives = results.filter(r => r.type === 'objective');
   const folders = results.filter(r => r.type === 'folder');
   const web = results.filter(r => r.type === 'web');
 
   let flatIndex = 0;
+
+  // Helper to render favicon or fallback icon
+  const renderFavicon = (faviconUrl, fallback) => {
+    if (faviconUrl) {
+      return `<img class="web-search-result-favicon" src="${escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"/><span class="web-search-result-icon" style="display:none">${fallback}</span>`;
+    }
+    return `<span class="web-search-result-icon">${fallback}</span>`;
+  };
+
+  // History items (visited sites)
+  if (history.length > 0) {
+    html += '<div class="web-search-section">History</div>';
+    history.forEach(item => {
+      const displayUrl = item.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      html += `<div class="web-search-result history-result" data-index="${flatIndex}" data-type="history" data-url="${escapeHtml(item.url)}">
+        ${renderFavicon(item.faviconUrl, '🕐')}
+        <div class="web-search-result-content">
+          <span class="web-search-result-title">${highlightMatch(item.title, query)}</span>
+          <span class="web-search-result-url">${highlightMatch(displayUrl, query)}</span>
+        </div>
+        ${item.visitCount > 1 ? `<span class="web-search-result-visits">${item.visitCount}</span>` : ''}
+      </div>`;
+      flatIndex++;
+    });
+  }
+
+  // Suggestions (common sites not yet visited)
+  if (suggestions.length > 0) {
+    html += '<div class="web-search-section">Suggestions</div>';
+    suggestions.forEach(item => {
+      const displayUrl = item.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      html += `<div class="web-search-result suggestion-result" data-index="${flatIndex}" data-type="suggestion" data-url="${escapeHtml(item.url)}">
+        ${renderFavicon(item.faviconUrl, '🌐')}
+        <div class="web-search-result-content">
+          <span class="web-search-result-title">${highlightMatch(item.title, query)}</span>
+          <span class="web-search-result-url">${escapeHtml(displayUrl)}</span>
+        </div>
+      </div>`;
+      flatIndex++;
+    });
+  }
+
+  // Bookmarks
+  if (bookmarks.length > 0) {
+    html += '<div class="web-search-section">Bookmarks</div>';
+    bookmarks.forEach(item => {
+      const displayUrl = item.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      html += `<div class="web-search-result bookmark-result" data-index="${flatIndex}" data-type="bookmark" data-url="${escapeHtml(item.url)}">
+        ${renderFavicon(item.faviconUrl, '⭐')}
+        <div class="web-search-result-content">
+          <span class="web-search-result-title">${highlightMatch(item.title, query)}</span>
+          <span class="web-search-result-url">${highlightMatch(displayUrl, query)}</span>
+        </div>
+      </div>`;
+      flatIndex++;
+    });
+  }
 
   if (objectives.length > 0) {
     html += '<div class="web-search-section">Objectives</div>';
@@ -378,6 +482,9 @@ function getResultFromElement(el) {
     return { type: 'objective', id: el.dataset.id, index: parseInt(el.dataset.objIndex, 10) };
   } else if (type === 'folder') {
     return { type: 'folder', id: el.dataset.id };
+  } else if (type === 'history' || type === 'suggestion' || type === 'bookmark') {
+    // All URL-based types navigate as web
+    return { type: 'web', url: el.dataset.url };
   } else {
     return { type: 'web', url: el.dataset.url };
   }
@@ -465,7 +572,7 @@ function navigateToResult(result) {
 
     // Load the URL in the webview after render
     setTimeout(() => {
-      const webview = document.querySelector('.web-browser-frame');
+      const webview = getActiveWebview();
       if (webview) {
         const url = buildWebUrl(result.url);
         webview.src = url;
@@ -676,8 +783,12 @@ export function updateFromSelection() {
     if (!navInput.value) {
       navInput.placeholder = 'Search or enter URL';
     }
-    // Icon will be set by favicon event, default to web globe
-    setIcon('web');
+    // Use current favicon if available, otherwise default to web globe
+    if (currentFaviconUrl) {
+      setIcon(currentFaviconUrl);
+    } else {
+      setIcon('web');
+    }
     return;
   }
 
@@ -731,23 +842,45 @@ export function setUrl(url) {
     navInput.placeholder = 'Search or enter URL';
   }
 
+  // Clear stale page metadata when URL changes
+  if (url !== currentWebUrl) {
+    currentPageTitle = null;
+    currentFaviconUrl = null;
+    // Reset icon to globe until new favicon loads
+    setIcon('web');
+  }
+
   // Track current URL for bookmark feature
   currentWebUrl = url;
   checkBookmarkStatus(url);
 }
 
 /**
- * Set the current page title (for bookmark feature)
+ * Set the current page title (for bookmark feature and history)
  */
 export function setPageTitle(title) {
   currentPageTitle = title;
+  // Update history with new title
+  if (currentWebUrl && title) {
+    HistoryStorage.recordVisit(currentWebUrl, title, currentFaviconUrl);
+  }
 }
 
 /**
- * Set the current favicon URL (for bookmark feature)
+ * Set the current favicon URL (for bookmark feature and history)
  */
 export function setFavicon(faviconUrl) {
   currentFaviconUrl = faviconUrl;
+
+  // Update the nav bar icon to show favicon
+  if (faviconUrl) {
+    setIcon(faviconUrl);
+  }
+
+  // Update history with new favicon
+  if (currentWebUrl && faviconUrl) {
+    HistoryStorage.recordVisit(currentWebUrl, currentPageTitle || currentWebUrl, faviconUrl);
+  }
 }
 
 // ========================================
@@ -826,23 +959,37 @@ export function clear() {
  * @param {string} icon - Icon type ('search', 'home', 'folder', 'objective', 'web') or favicon URL
  */
 export function setIcon(icon) {
+  console.log('[DEBUG] setIcon called with:', icon);
   const navBar = document.getElementById('global-nav-bar');
-  if (!navBar) return;
+  if (!navBar) {
+    console.log('[DEBUG] navBar not found!');
+    return;
+  }
 
   let iconEl = navBar.querySelector('.global-nav-icon');
-  if (!iconEl) return;
+  if (!iconEl) {
+    console.log('[DEBUG] iconEl not found!');
+    return;
+  }
+
+  console.log('[DEBUG] iconEl found:', iconEl.tagName);
 
   // Check if it's a URL (favicon)
+  const tagName = iconEl.tagName.toUpperCase();
+
   if (icon && (icon.startsWith('http') || icon.startsWith('data:'))) {
+    console.log('[DEBUG] Treating as favicon URL, current tagName:', tagName);
     // Replace SVG with img if needed
-    if (iconEl.tagName === 'SVG') {
+    if (tagName === 'SVG') {
       const img = document.createElement('img');
       img.className = 'global-nav-icon global-nav-favicon';
       img.src = icon;
       img.alt = '';
       iconEl.replaceWith(img);
+      console.log('[DEBUG] Replaced SVG with IMG');
     } else {
       iconEl.src = icon;
+      console.log('[DEBUG] Updated existing IMG src');
     }
   } else {
     // Built-in icon - restore SVG if needed
@@ -856,7 +1003,7 @@ export function setIcon(icon) {
 
     const svgContent = svgIcons[icon] || svgIcons.search;
 
-    if (iconEl.tagName === 'IMG') {
+    if (tagName === 'IMG') {
       // Replace img with SVG
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('class', 'global-nav-icon');

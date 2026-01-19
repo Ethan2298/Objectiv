@@ -12,6 +12,7 @@
 import * as Repository from './data/repository.js';
 import * as BookmarkStorage from './data/bookmark-storage.js';
 import * as TabState from './state/tab-state.js';
+import * as TabContentManager from './state/tab-content-manager.js';
 import * as SideListState from './state/side-list-state.js';
 import * as AppState from './state/app-state.js';
 
@@ -66,6 +67,7 @@ window.Objectiv = {
   Repository,
   BookmarkStorage,
   TabState,
+  TabContentManager,
   SideListState,
   AppState,
 
@@ -170,12 +172,56 @@ function saveData() {
 }
 
 /**
+ * Open a URL in a new tab (used for target="_blank" links from webviews)
+ */
+function openUrlInNewTab(url) {
+  if (!url) return;
+
+  // Create a new tab
+  const newTabId = Tabs.createNewTab('Loading...');
+
+  // Set the new tab to web mode
+  TabState.setViewMode('web');
+  AppState.setViewMode('web');
+
+  // Render the content (creates the webview container)
+  ContentView.renderContentView();
+
+  // Load the URL in the new tab's webview
+  setTimeout(() => {
+    const newWebview = TabContentManager.getWebview(newTabId);
+    if (newWebview) {
+      newWebview.src = url;
+
+      // Update nav bar
+      GlobalNav.setUrl(url);
+
+      // Set initial tab title from URL hostname
+      try {
+        const hostname = new URL(url).hostname;
+        if (hostname) {
+          Tabs.updateTabTitleById(newTabId, hostname);
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }, 50);
+}
+
+/**
  * Update active tab title and icon based on current selection
  * Also updates URL and browser window title
  */
 function updateTabTitleFromSelection() {
   const selection = TabState.getSelection();
-  const viewMode = AppState.getViewMode();
+  const viewMode = TabState.getViewMode() || AppState.getViewMode();
+
+  // Web tabs get their title/icon from webview events - don't overwrite
+  if (viewMode === 'web') {
+    const tabData = TabState.getTabById(TabState.getActiveTabId());
+    Router.updateURL('web', null);
+    Router.updateWindowTitle(tabData?.title || 'Web');
+    return;
+  }
 
   let title = 'Objectiv';
   let icon = 'home';
@@ -185,11 +231,6 @@ function updateTabTitleFromSelection() {
     title = 'Home';
     icon = 'home';
     windowTitle = null; // Will show just "Objectiv"
-  } else if (selection.type === 'web') {
-    // Web view - title/icon will be updated by webview events
-    title = 'Web';
-    icon = 'web';
-    windowTitle = 'Web';
   } else if (selection.type === 'settings') {
     title = 'Settings';
     icon = 'settings';
@@ -504,8 +545,16 @@ export async function init() {
     });
   }
 
+  // Listen for new tab requests from webview (target="_blank" links)
+  if (window.electronAPI?.onOpenUrlInNewTab) {
+    window.electronAPI.onOpenUrlInNewTab((url) => {
+      openUrlInNewTab(url);
+    });
+  }
+
   // Initialize state modules
   SideListState.init();
+  TabContentManager.init();
 
   // Wire all callbacks
   wireCallbacks();
@@ -577,6 +626,7 @@ export {
   Repository,
   BookmarkStorage,
   TabState,
+  TabContentManager,
   SideListState,
   AppState,
 
@@ -619,6 +669,7 @@ export default {
   Repository,
   BookmarkStorage,
   TabState,
+  TabContentManager,
   SideListState,
   AppState,
   Utils,

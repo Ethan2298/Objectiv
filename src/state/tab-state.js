@@ -296,6 +296,25 @@ export function setTabTitleById(tabId, title) {
 }
 
 /**
+ * Get icon of specific tab
+ */
+export function getTabIconById(tabId) {
+  const tab = state.tabs.get(tabId);
+  return tab ? tab.icon : null;
+}
+
+/**
+ * Set icon of specific tab
+ */
+export function setTabIconById(tabId, icon) {
+  const tab = state.tabs.get(tabId);
+  if (tab) {
+    tab.icon = icon;
+    saveToStorage();
+  }
+}
+
+/**
  * Get all tab IDs
  */
 export function getTabIds() {
@@ -470,6 +489,8 @@ export default {
   setTabIcon,
   getTabTitleById,
   setTabTitleById,
+  getTabIconById,
+  setTabIconById,
   getTabIds,
   getActiveTabId,
   getTabById,

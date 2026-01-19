@@ -3,6 +3,7 @@
 // ========================================
 
 import * as TabState from '../state/tab-state.js';
+import * as TabContentManager from '../state/tab-content-manager.js';
 
 let _callbacks = {
   updateView: null
@@ -128,7 +129,8 @@ function getIconSvgInline(iconType) {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
     folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
     objective: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
-    web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+    web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>'
   };
   return icons[iconType] || icons.home;
 }
@@ -197,6 +199,9 @@ function handleCloseTab(tabEl) {
   const wasActive = tabEl.classList.contains('active');
   const tabIndex = Array.from(tabs).indexOf(tabEl);
 
+  // Destroy the content container for this tab (frees memory)
+  TabContentManager.destroyContainer(tabId);
+
   // Close tab in state
   TabState.closeTab(tabId);
 
@@ -264,6 +269,49 @@ function handleCreateTab() {
 }
 
 /**
+ * Create a new tab with specified title and icon
+ * @param {string} title - Tab title
+ * @param {string} icon - Icon type (home, folder, objective, web, settings)
+ * @returns {string} The new tab's ID
+ */
+export function createNewTab(title = 'New Tab', icon = 'home') {
+  const tabsContainer = document.querySelector('.header-tabs');
+  if (!tabsContainer) return null;
+
+  const addBtn = tabsContainer.querySelector('.tab-add');
+
+  // Save current tab's scroll position before switching
+  TabState.setScrollPosition(getSidebarScrollPosition());
+
+  // Remove active class from existing tabs first
+  const existingTabs = document.querySelectorAll('.header-tab');
+  existingTabs.forEach(t => t.classList.remove('active'));
+
+  // Create tab in state (this also sets it as active)
+  const newTabId = TabState.createTab(title);
+
+  // Create DOM element
+  const tab = document.createElement('div');
+  tab.className = 'header-tab active';
+  tab.dataset.tabId = newTabId;
+  tab.innerHTML = `
+    <span class="tab-icon">${getIconSvgInline(icon)}</span>
+    <span class="tab-title">${title}</span>
+    <button class="tab-close" aria-label="Close tab">&times;</button>
+  `;
+
+  // Insert before the add button
+  tabsContainer.insertBefore(tab, addBtn);
+
+  // Update view to show new tab's content
+  if (_callbacks.updateView) {
+    _callbacks.updateView();
+  }
+
+  return newTabId;
+}
+
+/**
  * Update the active tab's title (both state and DOM)
  */
 export function updateActiveTabTitle(title) {
@@ -275,6 +323,23 @@ export function updateActiveTabTitle(title) {
   const activeTabEl = document.querySelector(`.header-tab[data-tab-id="${activeTabId}"]`);
   if (activeTabEl) {
     const titleEl = activeTabEl.querySelector('.tab-title');
+    if (titleEl) titleEl.textContent = title;
+  }
+}
+
+/**
+ * Update a specific tab's title by ID (both state and DOM)
+ * @param {string} tabId - The tab ID to update
+ * @param {string} title - The new title
+ */
+export function updateTabTitleById(tabId, title) {
+  // Update state
+  TabState.setTabTitleById(tabId, title);
+
+  // Update DOM
+  const tabEl = document.querySelector(`.header-tab[data-tab-id="${tabId}"]`);
+  if (tabEl) {
+    const titleEl = tabEl.querySelector('.tab-title');
     if (titleEl) titleEl.textContent = title;
   }
 }
@@ -308,6 +373,34 @@ export function updateActiveTabIcon(icon) {
 }
 
 /**
+ * Update a specific tab's icon by ID (both state and DOM)
+ * @param {string} tabId - The tab ID to update
+ * @param {string} icon - Icon type ('home', 'folder', 'objective', 'web') or favicon URL
+ */
+export function updateTabIconById(tabId, icon) {
+  // Update state
+  TabState.setTabIconById(tabId, icon);
+
+  // Update DOM
+  const tabEl = document.querySelector(`.header-tab[data-tab-id="${tabId}"]`);
+  if (tabEl) {
+    let iconEl = tabEl.querySelector('.tab-icon');
+
+    // Create icon element if it doesn't exist
+    if (!iconEl) {
+      iconEl = document.createElement('span');
+      iconEl.className = 'tab-icon';
+      const titleEl = tabEl.querySelector('.tab-title');
+      if (titleEl) {
+        tabEl.insertBefore(iconEl, titleEl);
+      }
+    }
+
+    iconEl.innerHTML = getTabIconHtml(icon);
+  }
+}
+
+/**
  * Get the active tab ID (for external use)
  */
 export function getActiveTabId() {
@@ -321,7 +414,10 @@ export function getActiveTabId() {
 export default {
   initTabs,
   setCallbacks,
+  createNewTab,
   updateActiveTabTitle,
   updateActiveTabIcon,
+  updateTabTitleById,
+  updateTabIconById,
   getActiveTabId
 };

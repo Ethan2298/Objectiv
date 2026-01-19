@@ -105,6 +105,15 @@ function createWindow() {
 
   win.loadFile('index.html');
 
+  // Handle webview new window requests (target="_blank" links, window.open, etc.)
+  win.webContents.on('did-attach-webview', (event, webviewWebContents) => {
+    webviewWebContents.setWindowOpenHandler(({ url }) => {
+      // Send URL to renderer to open in a new tab
+      win.webContents.send('open-url-in-new-tab', url);
+      return { action: 'deny' }; // Prevent default new window
+    });
+  });
+
   // Fullscreen events - notify renderer to adjust UI
   win.on('enter-full-screen', () => {
     win.webContents.send('fullscreen-change', true);
