@@ -19,6 +19,13 @@ let selectedIndex = -1;
 let currentResults = [];
 let blurTimeout = null;
 
+// Inline autocomplete state
+let inlineSuggestion = null;        // Full suggested URL
+let inlineCompletionText = null;    // The suffix being auto-completed
+let userInputBeforeInline = null;   // Track what user actually typed
+let inlineDebounceTimer = null;
+const INLINE_DEBOUNCE_MS = 50;
+
 // DOM References
 let navInput = null;
 let dropdown = null;
@@ -141,41 +148,129 @@ function getActiveWebview() {
 // Event Handlers
 // ========================================
 
-function handleInput() {
-  const query = navInput.value.trim();
+function handleInput(e) {
+  // Clear debounce timer
+  if (inlineDebounceTimer) {
+    clearTimeout(inlineDebounceTimer);
+    inlineDebounceTimer = null;
+  }
+
+  // Get the actual user input
+  // If there's a selection from inline autocomplete, the user typed over it
+  let userInput;
+  const selStart = navInput.selectionStart;
+  const selEnd = navInput.selectionEnd;
+
+  if (inlineSuggestion && selStart !== selEnd) {
+    // User typed while suggestion was selected - use text before selection
+    userInput = navInput.value.substring(0, selStart);
+    // Clear the selected portion that wasn't accepted
+    navInput.value = userInput;
+    clearInlineSuggestion();
+  } else if (userInputBeforeInline && navInput.value.length < userInputBeforeInline.length + (inlineCompletionText?.length || 0)) {
+    // User deleted characters - use current value
+    userInput = navInput.value;
+    clearInlineSuggestion();
+  } else {
+    userInput = navInput.value;
+    clearInlineSuggestion();
+  }
+
+  const query = userInput.trim();
+
   if (query) {
+    // Show dropdown results (existing behavior)
     const results = getSearchResults(query);
     renderDropdown(results, query);
+
+    // Apply inline autocomplete with short debounce
+    inlineDebounceTimer = setTimeout(() => {
+      applyInlineAutocomplete(query);
+    }, INLINE_DEBOUNCE_MS);
   } else {
     closeDropdown();
   }
 }
 
 function handleKeydown(e) {
-  if (dropdown.style.display === 'none') {
-    if (e.key === 'Enter') {
-      const query = navInput.value.trim();
-      if (query) {
-        // Navigate to web
-        navigateToResult({ type: 'web', url: query });
-      }
-    }
+  // Handle Tab key - accept inline suggestion
+  if (e.key === 'Tab' && inlineSuggestion) {
+    e.preventDefault();
+    acceptInlineSuggestion();
     return;
   }
 
-  const resultEls = dropdown.querySelectorAll('.web-search-result');
-  const resultCount = resultEls.length;
+  // Handle Right Arrow at end of user input - accept inline suggestion
+  if (e.key === 'ArrowRight' && inlineSuggestion) {
+    const selStart = navInput.selectionStart;
+    const selEnd = navInput.selectionEnd;
+    // Only accept if cursor is at the boundary between user input and suggestion
+    if (selStart !== selEnd && userInputBeforeInline &&
+        selStart === userInputBeforeInline.length) {
+      e.preventDefault();
+      acceptInlineSuggestion();
+      return;
+    }
+  }
 
-  if (e.key === 'ArrowDown') {
+  // Handle Escape - clear inline suggestion (and close dropdown)
+  if (e.key === 'Escape') {
+    if (inlineSuggestion) {
+      e.preventDefault();
+      // Restore just the user's input
+      navInput.value = userInputBeforeInline || '';
+      clearInlineSuggestion();
+      closeDropdown();
+      return;
+    }
+    // Existing escape behavior
     e.preventDefault();
-    selectedIndex = (selectedIndex + 1) % resultCount;
-    updateSelection();
-  } else if (e.key === 'ArrowUp') {
+    closeDropdown();
+    navInput.blur();
+    return;
+  }
+
+  // Handle Backspace - clear inline if suggestion present
+  if (e.key === 'Backspace' && inlineSuggestion) {
+    const selStart = navInput.selectionStart;
+    const selEnd = navInput.selectionEnd;
+    if (selStart !== selEnd) {
+      // Clear the selected portion first, then normal backspace
+      e.preventDefault();
+      const userPart = navInput.value.substring(0, selStart);
+      navInput.value = userPart.slice(0, -1); // Remove one char
+      clearInlineSuggestion();
+      // Trigger a fresh search with remaining input
+      handleInput();
+      return;
+    }
+  }
+
+  // Handle Delete key similarly
+  if (e.key === 'Delete' && inlineSuggestion) {
+    const selStart = navInput.selectionStart;
+    const selEnd = navInput.selectionEnd;
+    if (selStart !== selEnd) {
+      e.preventDefault();
+      navInput.value = navInput.value.substring(0, selStart);
+      clearInlineSuggestion();
+      handleInput();
+      return;
+    }
+  }
+
+  // Handle Enter - use inline URL if present and no dropdown selection
+  if (e.key === 'Enter') {
     e.preventDefault();
-    selectedIndex = selectedIndex <= 0 ? resultCount - 1 : selectedIndex - 1;
-    updateSelection();
-  } else if (e.key === 'Enter') {
-    e.preventDefault();
+    // If inline suggestion exists and no dropdown item selected, use inline
+    if (inlineSuggestion && selectedIndex === -1) {
+      navigateToResult({ type: 'web', url: inlineSuggestion });
+      return;
+    }
+
+    const resultEls = dropdown.querySelectorAll('.web-search-result');
+    const resultCount = resultEls.length;
+
     if (selectedIndex >= 0 && selectedIndex < resultCount) {
       const el = resultEls[selectedIndex];
       navigateToResult(getResultFromElement(el));
@@ -186,16 +281,41 @@ function handleKeydown(e) {
         navigateToResult({ type: 'web', url: query });
       }
     }
-  } else if (e.key === 'Escape') {
+    return;
+  }
+
+  // Exit early if dropdown is hidden
+  if (dropdown.style.display === 'none') {
+    return;
+  }
+
+  const resultEls = dropdown.querySelectorAll('.web-search-result');
+  const resultCount = resultEls.length;
+
+  if (e.key === 'ArrowDown') {
     e.preventDefault();
-    closeDropdown();
-    navInput.blur();
+    // Clear inline when navigating dropdown
+    if (inlineSuggestion) {
+      navInput.value = userInputBeforeInline || navInput.value.substring(0, navInput.selectionStart);
+      clearInlineSuggestion();
+    }
+    selectedIndex = (selectedIndex + 1) % resultCount;
+    updateSelection();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (inlineSuggestion) {
+      navInput.value = userInputBeforeInline || navInput.value.substring(0, navInput.selectionStart);
+      clearInlineSuggestion();
+    }
+    selectedIndex = selectedIndex <= 0 ? resultCount - 1 : selectedIndex - 1;
+    updateSelection();
   }
 }
 
 function handleBlur() {
   blurTimeout = setTimeout(() => {
     closeDropdown();
+    clearInlineSuggestion();
     // Restore breadcrumb if input is empty
     if (navInput && !navInput.value.trim()) {
       updateFromSelection();
@@ -467,6 +587,9 @@ function renderDropdown(results, query) {
   dropdown.innerHTML = html;
   dropdown.style.display = 'block';
 
+  // Update ARIA expanded state
+  navInput.setAttribute('aria-expanded', 'true');
+
   // Add click handlers
   dropdown.querySelectorAll('.web-search-result').forEach(el => {
     el.addEventListener('mousedown', (e) => {
@@ -495,6 +618,10 @@ function closeDropdown() {
     dropdown.style.display = 'none';
     dropdown.innerHTML = '';
   }
+  // Update ARIA expanded state
+  if (navInput) {
+    navInput.setAttribute('aria-expanded', 'false');
+  }
   currentResults = [];
   selectedIndex = -1;
 }
@@ -509,6 +636,98 @@ function updateSelection() {
   if (selected) {
     selected.scrollIntoView({ block: 'nearest' });
   }
+}
+
+// ========================================
+// Inline Autocomplete
+// ========================================
+
+/**
+ * Get display URL (strip protocol, optionally www)
+ */
+function getDisplayUrl(url) {
+  return url
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/$/, '');
+}
+
+/**
+ * Clear inline suggestion state
+ */
+function clearInlineSuggestion() {
+  inlineSuggestion = null;
+  inlineCompletionText = null;
+  userInputBeforeInline = null;
+}
+
+/**
+ * Accept the inline suggestion
+ */
+function acceptInlineSuggestion() {
+  if (!inlineSuggestion) return false;
+
+  // Move cursor to end (deselect)
+  const len = navInput.value.length;
+  navInput.setSelectionRange(len, len);
+
+  // Clear state (keep the text)
+  clearInlineSuggestion();
+  return true;
+}
+
+/**
+ * Apply inline autocomplete to the input
+ * Shows completion text as selected (highlighted) suffix
+ */
+function applyInlineAutocomplete(userInput) {
+  // Clear any existing suggestion
+  clearInlineSuggestion();
+
+  // Don't show inline for empty input or very short queries
+  if (!userInput || userInput.length < 2) return;
+
+  // Only show inline for URL-like inputs, not search queries
+  // This prevents inline suggestions when user is clearly searching
+  const hasSpace = userInput.includes(' ');
+  if (hasSpace) return;
+
+  // Get best prefix match
+  const match = HistoryStorage.getBestPrefixMatch(userInput);
+  if (!match) return;
+
+  // Extract the completion portion
+  const fullUrl = match.url;
+  const displayUrl = getDisplayUrl(fullUrl);
+  const lowerDisplay = displayUrl.toLowerCase();
+  const lowerInput = userInput.toLowerCase();
+
+  // Find where user input matches in the display URL
+  let matchStart = -1;
+  if (lowerDisplay.startsWith(lowerInput)) {
+    matchStart = 0;
+  }
+
+  if (matchStart === -1) return;
+
+  // Calculate the completion suffix
+  const completionStart = matchStart + userInput.length;
+  const completionText = displayUrl.substring(completionStart);
+
+  if (!completionText) return; // Nothing to complete
+
+  // Store state
+  inlineSuggestion = fullUrl;
+  inlineCompletionText = completionText;
+  userInputBeforeInline = userInput;
+
+  // Apply to input: show full text with suffix selected
+  const fullText = userInput + completionText;
+  navInput.value = fullText;
+
+  // Select the completion portion (this is the key browser behavior)
+  // setSelectionRange(start, end) where start is after user input
+  navInput.setSelectionRange(userInput.length, fullText.length);
 }
 
 // ========================================

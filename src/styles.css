@@ -631,6 +631,25 @@ body.solarized-mode .side-item.selected {
   overflow-y: auto;
   z-index: 100;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-dim) transparent;
+}
+
+.web-search-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.web-search-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.web-search-dropdown::-webkit-scrollbar-thumb {
+  background: var(--text-dim);
+  border-radius: 3px;
+}
+
+.web-search-dropdown::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .web-search-section {

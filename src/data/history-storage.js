@@ -284,6 +284,65 @@ export function clearAllHistory() {
   saveAllHistory([]);
 }
 
+/**
+ * Get the single best URL that starts with the query (prefix match)
+ * Used for inline autocomplete in the URL bar
+ *
+ * Priority:
+ * 1. History entries matching URL prefix (by frecency)
+ * 2. Common sites matching URL prefix
+ *
+ * @param {string} query - User's input
+ * @returns {Object|null} - Best match with { url, title, faviconUrl, frecency } or null
+ */
+export function getBestPrefixMatch(query) {
+  if (!query || query.length < 2) return null;
+
+  const lowerQuery = query.toLowerCase();
+  const history = loadAllHistory();
+
+  // Helper to check if URL starts with query (handles protocol variations)
+  const urlStartsWith = (url, q) => {
+    const lower = url.toLowerCase();
+    // Match with or without protocol
+    if (lower.startsWith(q)) return true;
+    if (lower.startsWith('https://' + q)) return true;
+    if (lower.startsWith('http://' + q)) return true;
+    if (lower.startsWith('https://www.' + q)) return true;
+    if (lower.startsWith('http://www.' + q)) return true;
+    // Also match after protocol removal
+    const withoutProtocol = lower.replace(/^https?:\/\/(www\.)?/, '');
+    return withoutProtocol.startsWith(q);
+  };
+
+  // Filter history for prefix matches
+  const historyMatches = history
+    .filter(entry => urlStartsWith(entry.url, lowerQuery))
+    .map(entry => ({ ...entry, frecency: calculateFrecency(entry) }))
+    .sort((a, b) => b.frecency - a.frecency);
+
+  if (historyMatches.length > 0) {
+    return {
+      type: 'history',
+      ...historyMatches[0]
+    };
+  }
+
+  // Fall back to common sites
+  const commonMatch = COMMON_SITES.find(site => urlStartsWith(site.url, lowerQuery));
+  if (commonMatch) {
+    return {
+      type: 'suggestion',
+      url: commonMatch.url,
+      title: commonMatch.title,
+      faviconUrl: commonMatch.faviconUrl,
+      frecency: 0
+    };
+  }
+
+  return null;
+}
+
 // ========================================
 // Default Export
 // ========================================
@@ -295,5 +354,6 @@ export default {
   getSuggestions,
   getTopSites,
   deleteHistoryEntry,
-  clearAllHistory
+  clearAllHistory,
+  getBestPrefixMatch
 };
