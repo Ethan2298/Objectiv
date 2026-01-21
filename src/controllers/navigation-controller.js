@@ -30,86 +30,10 @@ let _rafPending = false;
 
 /**
  * Initialize scroll-snap based selection
- * Desktop only - mobile uses tap-to-select
+ * Disabled - sidebar now uses normal scrolling with click-to-select
  */
 export function initScrollSnapSelection() {
-  const sideListItems = document.getElementById('side-list-items');
-  if (!sideListItems || AppState.isMobile()) return;
-
-  sideListItems.addEventListener('scroll', () => {
-    if (_rafPending) return;
-    _rafPending = true;
-
-    // Capture active tab ID before async work
-    const scrollTabId = TabState.getActiveTabId();
-
-    requestAnimationFrame(() => {
-      _rafPending = false;
-
-      // Only process if still on the same tab
-      if (TabState.getActiveTabId() !== scrollTabId) return;
-
-      const SideListState = window.Objectiv?.SideListState;
-      if (!SideListState) return;
-
-      const items = sideListItems.querySelectorAll('.side-item');
-      if (!items.length) return;
-
-      // Find item closest to snap line (30% from top)
-      const containerRect = sideListItems.getBoundingClientRect();
-      const snapLineY = containerRect.top + (window.innerHeight * 0.30);
-
-      let closestIdx = 0;
-      let closestDistance = Infinity;
-
-      items.forEach((item, idx) => {
-        const itemRect = item.getBoundingClientRect();
-        const distance = Math.abs(itemRect.top - snapLineY);
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestIdx = idx;
-        }
-      });
-
-      const prevIdx = SideListState.getSelectedIndex();
-      if (closestIdx !== prevIdx) {
-        // Skip scroll-snap selection changes while editing
-        if (AppState.isActivelyEditing()) {
-          return;
-        }
-
-        // Update state
-        SideListState.setSelectedIndex(closestIdx);
-
-        // Update visual dot
-        if (items[prevIdx]) items[prevIdx].classList.remove('selected');
-        if (items[closestIdx]) items[closestIdx].classList.add('selected');
-
-        // Update content immediately
-        const itemData = SideListState.getItems()[closestIdx];
-        if (itemData?.type === SideListState.ItemType.HOME) {
-          AppState.setViewMode('home');
-          _renderContentView();
-          _updateTabTitle();
-        } else if (itemData?.type === SideListState.ItemType.WEB) {
-          AppState.setViewMode('web');
-          _renderContentView();
-          _updateTabTitle();
-        } else if (itemData?.type === SideListState.ItemType.OBJECTIVE) {
-          AppState.setSelectedObjectiveIndex(itemData.index);
-          AppState.setViewMode('objective');
-          _renderContentView();
-          _updateTabTitle();
-        } else if (itemData?.type === SideListState.ItemType.FOLDER) {
-          AppState.setViewMode('folder');
-          _renderContentView();
-          _updateTabTitle();
-        }
-
-        playNotch();
-      }
-    });
-  }, { passive: true });
+  // Scroll-based selection disabled - sidebar uses normal scrolling
 }
 
 // ========================================
@@ -472,7 +396,6 @@ export function updateSideListSelection() {
     const idx = parseInt(item.dataset.idx, 10);
     if (idx === selectedIdx) {
       item.classList.add('selected');
-      item.scrollIntoView({ block: 'start' });
     } else {
       item.classList.remove('selected');
     }

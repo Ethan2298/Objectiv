@@ -193,8 +193,15 @@ function handleCloseTab(tabEl) {
 
   const tabs = document.querySelectorAll('.header-tab');
 
-  // Don't close if it's the last tab
-  if (tabs.length <= 1) return;
+  // Close app if closing the last tab
+  if (tabs.length <= 1) {
+    if (window.electronAPI?.close) {
+      window.electronAPI.close();
+    } else {
+      window.close();
+    }
+    return;
+  }
 
   const wasActive = tabEl.classList.contains('active');
   const tabIndex = Array.from(tabs).indexOf(tabEl);

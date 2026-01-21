@@ -88,6 +88,46 @@ export function placeCaretAtEnd(element) {
 }
 
 /**
+ * Place caret at the position closest to given coordinates within a contenteditable element
+ * @param {HTMLElement} element - The contenteditable element
+ * @param {number} clientX - Mouse X coordinate relative to viewport
+ * @param {number} clientY - Mouse Y coordinate relative to viewport
+ */
+export function placeCaretFromPoint(element, clientX, clientY) {
+  if (!element) return;
+
+  element.focus();
+
+  // Try standard API first (Firefox)
+  if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(clientX, clientY);
+    if (pos && element.contains(pos.offsetNode)) {
+      const range = document.createRange();
+      range.setStart(pos.offsetNode, pos.offset);
+      range.collapse(true);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+  }
+
+  // Fallback for WebKit/Blink (Chrome, Safari, Electron)
+  if (document.caretRangeFromPoint) {
+    const range = document.caretRangeFromPoint(clientX, clientY);
+    if (range && element.contains(range.startContainer)) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+  }
+
+  // Final fallback: place at end
+  placeCaretAtEnd(element);
+}
+
+/**
  * Place caret at a specific position in a contenteditable element
  * @param {HTMLElement} element - The contenteditable element
  * @param {number} position - Character position (0-indexed)
@@ -214,6 +254,7 @@ export default {
   // Caret
   placeCaretAtEnd,
   placeCaretAtPosition,
+  placeCaretFromPoint,
 
   // Textarea
   autoResizeTextarea,

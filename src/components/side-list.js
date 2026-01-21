@@ -89,11 +89,6 @@ export async function renderSideList() {
     lucide.createIcons();
   }
 
-  // Scroll selected to snap position
-  const selectedEl = container.querySelector('.side-item.selected');
-  if (selectedEl) {
-    selectedEl.scrollIntoView({ block: 'start' });
-  }
 }
 
 /**
@@ -355,38 +350,8 @@ async function handleSideItemClick(idx, itemData) {
     }
   }
 
-  // Mobile: execute immediately
-  if (AppState.isMobile()) {
-    executeAction();
-    return;
-  }
-
-  // Desktop: Scroll to snap position then execute
-  const container = document.getElementById('side-list-items');
-  const items = container?.querySelectorAll('.side-item');
-  if (container && items && items[idx]) {
-    const snapOffset = window.innerHeight * 0.30;
-    const targetScroll = idx === 0 ? 0 : items[idx].offsetTop - snapOffset + container.offsetTop;
-    const startScroll = container.scrollTop;
-    const distance = targetScroll - startScroll;
-    const duration = 200;
-    const startTime = performance.now();
-
-    function animateScroll(currentTime) {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      container.scrollTop = startScroll + distance * eased;
-      if (progress < 1) {
-        requestAnimationFrame(animateScroll);
-      } else {
-        executeAction();
-      }
-    }
-    requestAnimationFrame(animateScroll);
-  } else {
-    executeAction();
-  }
+  // Execute immediately - no scroll manipulation
+  executeAction();
 }
 
 // ========================================
@@ -409,7 +374,6 @@ export function updateSideListSelection() {
     const idx = parseInt(item.dataset.idx, 10);
     if (idx === selectedIdx) {
       item.classList.add('selected');
-      item.scrollIntoView({ block: 'start' });
     } else {
       item.classList.remove('selected');
     }
