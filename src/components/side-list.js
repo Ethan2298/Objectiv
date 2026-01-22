@@ -146,10 +146,12 @@ function createSideListItem(itemData, idx, isSelected) {
       item.className = 'side-item home-row' + (isSelected ? ' selected' : '');
       item.dataset.type = 'home';
       item.innerHTML = `
-        <svg class="home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
+        <span class="side-icon-slot">
+          <svg class="home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+        </span>
         <span class="side-item-name">Home</span>
               `;
 
@@ -228,20 +230,20 @@ function createSideListItem(itemData, idx, isSelected) {
       item.dataset.folderId = itemData.folderId || '';
       item.dataset.sortable = 'true';
 
-      const objectiveIcon = `<svg class="objective-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+      const objectiveIcon = `<svg class="objective-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="10"/>
         <circle cx="12" cy="12" r="1"/>
       </svg>`;
 
       if (isEditing) {
         item.innerHTML = `
-          ${objectiveIcon}
+          <span class="side-icon-slot">${objectiveIcon}</span>
           <span class="side-item-name" contenteditable="true" spellcheck="true" data-placeholder="Name your objective"></span>
         `;
         item.style.color = '#0891b2';
       } else {
         item.innerHTML = `
-          ${objectiveIcon}
+          <span class="side-icon-slot">${objectiveIcon}</span>
           <span class="side-item-name">${itemData.name}</span>        `;
         item.onclick = () => handleSideItemClick(idx, itemData);
 
@@ -264,11 +266,11 @@ function createSideListItem(itemData, idx, isSelected) {
 
       // Favicon or globe fallback
       const faviconHtml = itemData.faviconUrl
-        ? `<img class="bookmark-favicon" src="${itemData.faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><svg class="bookmark-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="display:none"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
-        : `<svg class="bookmark-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+        ? `<img class="bookmark-favicon" src="${itemData.faviconUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"/><svg class="bookmark-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
+        : `<svg class="bookmark-globe-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
 
       item.innerHTML = `
-        ${faviconHtml}
+        <span class="side-icon-slot">${faviconHtml}</span>
         <span class="side-item-name">${itemData.name}</span>      `;
 
       item.onclick = () => handleBookmarkClick(idx, itemData);
@@ -290,7 +292,7 @@ function createSideListItem(itemData, idx, isSelected) {
       item.dataset.sortable = 'true';
 
       // Note icon (document/page icon)
-      const noteIcon = `<svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+      const noteIcon = `<svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
         <polyline points="14 2 14 8 20 8"/>
         <line x1="16" y1="13" x2="8" y2="13"/>
@@ -298,7 +300,7 @@ function createSideListItem(itemData, idx, isSelected) {
       </svg>`;
 
       item.innerHTML = `
-        ${noteIcon}
+        <span class="side-icon-slot">${noteIcon}</span>
         <span class="side-item-name">${itemData.name || 'Untitled Note'}</span>      `;
 
       item.onclick = () => handleNoteClick(idx, itemData);

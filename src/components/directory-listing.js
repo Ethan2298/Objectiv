@@ -8,6 +8,8 @@
 import AppState from '../state/app-state.js';
 import * as TabState from '../state/tab-state.js';
 import * as TreeUtils from '../data/tree-utils.js';
+import * as BookmarkStorage from '../data/bookmark-storage.js';
+import { initDirectorySortable, destroyDirectorySortable } from './directory-listing-sortable.js';
 
 // ========================================
 // Icon SVGs
@@ -90,11 +92,12 @@ export function renderDirectoryListing(container, options = {}) {
   const data = AppState.getData();
 
   // Build tree from flat data
+  const bookmarks = BookmarkStorage.loadAllBookmarks();
   const tree = TreeUtils.flatToTree(
     data.objectives || [],
     data.folders || [],
     data.notes || [],
-    [] // Don't include bookmarks in directory listing
+    bookmarks
   );
 
   // Get items to display
@@ -110,6 +113,9 @@ export function renderDirectoryListing(container, options = {}) {
 
   // Flatten for render with expansion state
   const flatItems = flattenWithExpansion(items, directoryExpanded);
+
+  // Destroy existing sortable before re-render
+  destroyDirectorySortable();
 
   // Clear and render
   container.innerHTML = '';
@@ -130,6 +136,16 @@ export function renderDirectoryListing(container, options = {}) {
   }
 
   container.appendChild(listContainer);
+
+  // Initialize sortable drag-drop after rendering
+  if (flatItems.length > 0) {
+    // Use setTimeout to ensure DOM is fully ready
+    setTimeout(() => {
+      initDirectorySortable(listContainer, folderId, () => {
+        renderDirectoryListing(container, options);
+      });
+    }, 0);
+  }
 }
 
 /**
@@ -163,11 +179,12 @@ function createDirectoryItem(item, onItemClick, onFolderToggle, container, optio
   div.dataset.type = item.type;
   div.dataset.id = item.id;
   div.dataset.depth = item.depth || 0;
+  div.dataset.sortable = 'true';
 
   // Build content
   let html = '';
 
-  // Folder toggle or spacer
+  // Folder toggle/spacer OR item icon (aligned in same position)
   if (item.type === 'folder') {
     const hasChildren = item.children && item.children.length > 0;
     const isExp = isExpanded(item.id);
@@ -178,29 +195,32 @@ function createDirectoryItem(item, onItemClick, onFolderToggle, container, optio
       html += `<span class="dir-toggle-spacer"></span>`;
     }
   } else {
-    html += `<span class="dir-toggle-spacer"></span>`;
-  }
-
-  // Icon
-  switch (item.type) {
-    case 'folder':
-      html += isExpanded(item.id) ? ICONS.folderOpen : ICONS.folder;
-      break;
-    case 'objective':
-      html += ICONS.objective;
-      break;
-    case 'note':
-      html += ICONS.note;
-      break;
-    case 'bookmark':
-      html += ICONS.bookmark;
-      break;
-    default:
-      html += ICONS.note;
+    // Non-folder items: icon in wrapper to match toggle dimensions
+    let iconHtml = '';
+    switch (item.type) {
+      case 'objective':
+        iconHtml = ICONS.objective;
+        break;
+      case 'note':
+        iconHtml = ICONS.note;
+        break;
+      case 'bookmark':
+        if (item.faviconUrl) {
+          iconHtml = `<img class="dir-icon-favicon" src="${item.faviconUrl}" alt="" />`;
+        } else {
+          iconHtml = ICONS.bookmark;
+        }
+        break;
+      default:
+        iconHtml = ICONS.note;
+    }
+    html += `<span class="dir-icon-wrapper">${iconHtml}</span>`;
   }
 
   // Name
-  const name = item.name || (item.type === 'note' ? 'Untitled Note' : 'Unnamed');
+  const name = item.type === 'bookmark'
+    ? (item.title || item.url || 'Untitled Bookmark')
+    : (item.name || (item.type === 'note' ? 'Untitled Note' : 'Unnamed'));
   const escapedName = name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   html += `<span class="dir-name">${escapedName}</span>`;
 
@@ -211,7 +231,7 @@ function createDirectoryItem(item, onItemClick, onFolderToggle, container, optio
     if (item.type === 'folder') {
       // Check if clicked on toggle
       const toggle = e.target.closest('.dir-toggle');
-      if (toggle || e.target.closest('.dir-icon-folder')) {
+      if (toggle) {
         // Toggle expansion
         toggleExpanded(item.id);
         onFolderToggle(item);
@@ -235,5 +255,6 @@ function createDirectoryItem(item, onItemClick, onFolderToggle, container, optio
 export default {
   renderDirectoryListing,
   isExpanded,
-  toggleExpanded
+  toggleExpanded,
+  destroyDirectorySortable
 };
