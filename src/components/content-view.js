@@ -12,7 +12,6 @@ import { formatTimestamp, formatDuration } from '../utils.js';
 import { renderContentNextStep } from './next-step-timer.js';
 import GlobalNav from './global-nav.js';
 import { setupInlineEdit } from '../utils/inline-edit.js';
-import { executeNoteCommand } from './tiptap-editor.js';
 import { renderDirectoryListing } from './directory-listing.js';
 import * as TaskListView from './task-list-view.js';
 
@@ -775,12 +774,9 @@ async function renderNoteViewInContainer(container) {
     restoreOnEmpty: true
   });
 
-  // Clear container and render Editor.js editor
+  // Clear container and mount Editor.js directly (flat structure)
   container.innerHTML = '';
-
-  const editorContainer = document.createElement('div');
-  editorContainer.className = 'note-editor-container';
-  container.appendChild(editorContainer);
+  container.classList.add('note-editor');
 
   // Get modules for Editor.js and HTML migration
   const EditorJsEditor = window.Layer?.EditorJsEditor;
@@ -797,12 +793,12 @@ async function renderNoteViewInContainer(container) {
     }
   }
 
-  // Initialize Editor.js editor for note content
+  // Initialize Editor.js editor directly in container
   if (EditorJsEditor?.initNoteEditor) {
     await EditorJsEditor.initNoteEditor(
       editorContent,
       note.id,
-      editorContainer,
+      container,
       async (jsonContent) => {
         // Auto-save callback
         note.content = jsonContent;
@@ -813,39 +809,22 @@ async function renderNoteViewInContainer(container) {
       }
     );
   } else {
-    // Fallback if Editor.js is not ready - try Tiptap
-    const TiptapEditor = window.Layer?.TiptapEditor;
-    if (TiptapEditor?.initNoteEditor) {
-      await TiptapEditor.initNoteEditor(
-        note.content || '',
-        note.id,
-        editorContainer,
-        async (html) => {
-          note.content = html;
-          note.updatedAt = new Date().toISOString();
-          if (NoteStorage?.saveNote) {
-            await NoteStorage.saveNote(note);
-          }
-        }
-      );
-    } else {
-      // Final fallback - textarea
-      editorContainer.innerHTML = `
-        <div class="note-fallback-editor">
-          <textarea class="note-content-textarea" placeholder="Write your note...">${note.content || ''}</textarea>
-        </div>
-      `;
+    // Fallback - simple textarea
+    container.innerHTML = `
+      <div class="note-fallback-editor">
+        <textarea class="note-content-textarea" placeholder="Write your note...">${note.content || ''}</textarea>
+      </div>
+    `;
 
-      const textarea = editorContainer.querySelector('.note-content-textarea');
-      if (textarea) {
-        textarea.addEventListener('blur', async () => {
-          note.content = textarea.value;
-          note.updatedAt = new Date().toISOString();
-          if (NoteStorage?.saveNote) {
-            await NoteStorage.saveNote(note);
-          }
-        });
-      }
+    const textarea = container.querySelector('.note-content-textarea');
+    if (textarea) {
+      textarea.addEventListener('blur', async () => {
+        note.content = textarea.value;
+        note.updatedAt = new Date().toISOString();
+        if (NoteStorage?.saveNote) {
+          await NoteStorage.saveNote(note);
+        }
+      });
     }
   }
 }
@@ -1222,35 +1201,6 @@ export function endHoverPreview() {
 }
 
 // ========================================
-// Note Toolbar Setup
-// ========================================
-
-let noteToolbarInitialized = false;
-
-/**
- * Initialize note toolbar click handlers (call once on app init)
- */
-export function initNoteToolbar() {
-  if (noteToolbarInitialized) return;
-
-  const toolbar = document.getElementById('note-toolbar-row');
-  if (!toolbar) return;
-
-  toolbar.addEventListener('click', (e) => {
-    const btn = e.target.closest('.note-toolbar-btn');
-    if (!btn) return;
-
-    e.preventDefault();
-    const command = btn.dataset.command;
-    if (command) {
-      executeNoteCommand(command);
-    }
-  });
-
-  noteToolbarInitialized = true;
-}
-
-// ========================================
 // Default Export
 // ========================================
 
@@ -1267,6 +1217,5 @@ export default {
   startHoverPreview,
   endHoverPreview,
   createListItem,
-  createConfirmRow,
-  initNoteToolbar
+  createConfirmRow
 };

@@ -3584,22 +3584,62 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
    Note Editor Styles
    ======================================== */
 
-/* Container for the note editor - Notion-style full height */
-.note-editor-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+/* Note mode - document-style centered content */
+#content-view.note-mode #content-page {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 60px 40px;
   flex: 1;
-  overflow: visible;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
-/* Tiptap editor wrapper - fills entire area */
-.note-editor-wrapper {
+/* Responsive padding for narrower screens */
+@media (max-width: 768px) {
+  #content-view.note-mode #content-page {
+    padding: 40px 24px;
+  }
+}
+
+/* Note title - larger, scrolls with content */
+#content-view.note-mode #content-header {
+  padding: 0 0 12px 0;
+}
+
+#content-view.note-mode #content-header-title {
+  font-size: 2.5em;
+  font-weight: 700;
+}
+
+#content-view.note-mode #content-header-description {
+  display: none;
+}
+
+#content-view.note-mode #content-body {
+  flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+/* Note editor - fills remaining space, no extra scroll */
+.note-editor {
   flex: 1;
-  height: 100%;
-  overflow: visible;
+  cursor: text;
+}
+
+/* Note body text - larger for readability */
+.note-editor .ce-paragraph {
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+/* Remove Editor.js block margins in note mode - container has padding */
+.note-editor .ce-toolbar__content,
+.note-editor .ce-block__content {
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
 
 /* Note toolbar row - below global nav, only visible for notes */
@@ -3614,15 +3654,6 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
 /* Show toolbar when note mode is active */
 #content-view.note-mode .note-toolbar-row {
   display: flex;
-}
-
-/* Ensure popovers don't get clipped in note mode */
-#content-view.note-mode {
-  overflow: visible;
-}
-
-#content-view.note-mode #content-page {
-  overflow: visible;
 }
 
 .note-toolbar-group {
@@ -3667,72 +3698,6 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
 .note-toolbar-btn.is-active {
   background: var(--bg-hover);
   color: var(--accent);
-}
-
-/* Note editor container fills available space */
-.note-editor-wrapper .tiptap-editor-container {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  height: 100%;
-  cursor: text;
-}
-
-/* Tiptap editor content area for notes - Notion-style full area */
-.note-editor-wrapper .tiptap-editor,
-.note-editor-wrapper .ProseMirror {
-  flex: 1;
-  height: 100%;
-  min-height: 100%;
-  padding: 0;
-  outline: none;
-  color: var(--text);
-  font-size: 15px;
-  line-height: 1.7;
-  cursor: text;
-}
-
-/* Ensure the entire note editor area shows text cursor */
-.note-editor-container {
-  cursor: text;
-}
-
-.note-editor-wrapper {
-  cursor: text;
-}
-
-.note-editor-wrapper .tiptap-editor:focus,
-.note-editor-wrapper .ProseMirror:focus {
-  outline: none;
-}
-
-/* Placeholder styling for empty note */
-.note-editor-wrapper .ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--text-dim);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
-/* Note editor lists */
-.note-editor-wrapper .ProseMirror ul,
-.note-editor-wrapper .ProseMirror ol {
-  margin: 8px 0;
-  padding-left: 24px;
-}
-
-.note-editor-wrapper .ProseMirror li {
-  margin: 4px 0;
-}
-
-/* Nested lists - consistent indentation per level */
-.note-editor-wrapper .ProseMirror ul ul,
-.note-editor-wrapper .ProseMirror ol ol,
-.note-editor-wrapper .ProseMirror ul ol,
-.note-editor-wrapper .ProseMirror ol ul {
-  margin: 4px 0;
-  padding-left: 24px;
 }
 
 /* Fallback textarea for notes */
@@ -3786,15 +3751,6 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
 /* ========================================
    Editor.js Theme Overrides
    ======================================== */
-
-/* Editor.js wrapper */
-.editorjs-editor-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  height: 100%;
-  cursor: text;
-}
 
 /* Main editor container */
 .codex-editor {

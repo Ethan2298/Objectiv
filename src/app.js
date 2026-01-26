@@ -59,7 +59,6 @@ import * as SideList from './components/side-list.js';
 import * as ContentView from './components/content-view.js';
 import * as NextStepTimer from './components/next-step-timer.js';
 import * as GlobalNav from './components/global-nav.js';
-import * as TiptapEditor from './components/tiptap-editor.js';
 import * as EditorJsEditor from './components/editorjs-editor.js';
 import * as DirectoryListing from './components/directory-listing.js';
 import * as Toast from './components/toast.js';
@@ -111,7 +110,6 @@ window.Layer = {
   ContentView,
   NextStepTimer,
   GlobalNav,
-  TiptapEditor,
   EditorJsEditor,
   DirectoryListing,
   Toast,
@@ -762,9 +760,6 @@ export async function init() {
 
   // Initialize event handlers
   initEventHandlers();
-
-  // Initialize note toolbar
-  ContentView.initNoteToolbar();
 
   // Initial render - check if TabState has a saved selection
   const selection = TabState.getSelection();

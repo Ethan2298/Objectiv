@@ -74,14 +74,9 @@ export async function initNoteEditor(content, noteId, container, onAutoSave) {
   // Store auto-save callback
   autoSaveCallback = onAutoSave;
 
-  // Create editor container
-  container.innerHTML = `
-    <div class="editorjs-editor-wrapper">
-      <div id="editorjs-note-editor"></div>
-    </div>
-  `;
-
-  const editorElement = container.querySelector('#editorjs-note-editor');
+  // Mount Editor.js directly into container (flat structure)
+  container.innerHTML = '';
+  const editorElement = container;
 
   // Parse content - could be JSON or empty
   let initialData = null;
