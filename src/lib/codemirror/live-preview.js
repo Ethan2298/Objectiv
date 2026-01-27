@@ -47,6 +47,28 @@ class CheckboxWidget extends WidgetType {
 }
 
 /**
+ * Zero-width placeholder that preserves line styling for cursor height
+ */
+class StyledPlaceholderWidget extends WidgetType {
+  constructor(className) {
+    super();
+    this.className = className;
+  }
+
+  toDOM() {
+    const span = document.createElement('span');
+    span.className = this.className;
+    // Zero-width space to establish font metrics for cursor
+    span.textContent = '\u200B';
+    return span;
+  }
+
+  eq(other) {
+    return other.className === this.className;
+  }
+}
+
+/**
  * Horizontal rule widget
  */
 class HorizontalRuleWidget extends WidgetType {
@@ -65,7 +87,9 @@ class HorizontalRuleWidget extends WidgetType {
 // Decoration Classes
 // ========================================
 
-const hideDecoration = Decoration.mark({ class: 'cm-hide' });
+// Use replace decoration to properly remove syntax from visual flow
+// (mark with display:none can cause cursor positioning issues)
+const hideDecoration = Decoration.replace({});
 
 const lineDecorations = {
   header1: Decoration.line({ class: 'cm-md-header cm-md-header-1' }),
@@ -93,10 +117,13 @@ const markDecorations = {
 // ========================================
 
 /**
- * Check if cursor is within a specific range
+ * Check if cursor is strictly inside a range (exclusive both ends)
+ * - Typing `# ` puts cursor at position 2, outside (0,2), so syntax hides
+ * - Clicking at edges won't reveal syntax
+ * - Only arrow-keying INTO the syntax reveals it
  */
 function cursorInRange(cursorPos, from, to) {
-  return cursorPos >= from && cursorPos <= to;
+  return cursorPos > from && cursorPos < to;
 }
 
 /**
@@ -147,7 +174,8 @@ export const livePreviewPlugin = ViewPlugin.fromClass(class {
       if (text.startsWith('```')) {
         inCodeBlock = !inCodeBlock;
         decorations.push({ from, to: from, deco: lineDecorations.codeBlock });
-        if (!cursorOnThis) {
+        // Only show fence syntax when cursor is within the fence line
+        if (!cursorInRange(cursorPos, from, to)) {
           decorations.push({ from, to, deco: hideDecoration });
         }
         continue;
@@ -167,8 +195,16 @@ export const livePreviewPlugin = ViewPlugin.fromClass(class {
         if (headerDeco) {
           decorations.push({ from, to: from, deco: headerDeco });
         }
-        if (!cursorOnThis) {
-          decorations.push({ from, to: from + headerMatch[0].length, deco: hideDecoration });
+        // Only show syntax when cursor is within the marker itself
+        const syntaxEnd = from + headerMatch[0].length;
+        if (!cursorInRange(cursorPos, from, syntaxEnd)) {
+          // Use styled placeholder to maintain correct cursor height
+          decorations.push({
+            from, to: syntaxEnd,
+            deco: Decoration.replace({
+              widget: new StyledPlaceholderWidget(`cm-md-header cm-md-header-${level}`)
+            })
+          });
         }
         // Continue to process inline formatting on header lines
       }
@@ -187,10 +223,12 @@ export const livePreviewPlugin = ViewPlugin.fromClass(class {
       // Blockquotes: >
       if (text.startsWith('>')) {
         decorations.push({ from, to: from, deco: lineDecorations.quote });
-        if (!cursorOnThis) {
-          const qMatch = text.match(/^>\s?/);
-          if (qMatch) {
-            decorations.push({ from, to: from + qMatch[0].length, deco: hideDecoration });
+        // Only show `>` marker when cursor is within it
+        const qMatch = text.match(/^>\s?/);
+        if (qMatch) {
+          const markerEnd = from + qMatch[0].length;
+          if (!cursorInRange(cursorPos, from, markerEnd)) {
+            decorations.push({ from, to: markerEnd, deco: hideDecoration });
           }
         }
       }
@@ -199,10 +237,11 @@ export const livePreviewPlugin = ViewPlugin.fromClass(class {
       const taskMatch = text.match(/^(\s*)([-*+])\s+\[([ xX])\]\s/);
       if (taskMatch) {
         decorations.push({ from, to: from, deco: lineDecorations.listItem });
-        if (!cursorOnThis) {
-          const checked = taskMatch[3].toLowerCase() === 'x';
-          const markerStart = from + taskMatch[1].length;
-          const markerEnd = from + taskMatch[0].length;
+        // Only show checkbox widget when cursor is not within the marker
+        const checked = taskMatch[3].toLowerCase() === 'x';
+        const markerStart = from + taskMatch[1].length;
+        const markerEnd = from + taskMatch[0].length;
+        if (!cursorInRange(cursorPos, markerStart, markerEnd)) {
           decorations.push({
             from: markerStart, to: markerEnd,
             deco: Decoration.replace({ widget: new CheckboxWidget(checked) })
