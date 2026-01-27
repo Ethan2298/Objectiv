@@ -2547,6 +2547,52 @@ body.solarized-mode .settings-modal-overlay {
   padding: 8px 12px;
 }
 
+/* Tool Indicator */
+.tool-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 4px 0;
+  background: rgba(var(--accent-rgb, 249, 115, 22), 0.1);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.tool-indicator .tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+
+.tool-indicator .tool-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-indicator .tool-name {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 0.8rem;
+}
+
+.tool-indicator .tool-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tool-spin 0.8s linear infinite;
+  margin-left: auto;
+}
+
+@keyframes tool-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ========================================
    Message Toast
    ======================================== */
@@ -4567,18 +4613,23 @@ h3.ce-header {
 }
 
 /* Delimiter / Horizontal rule */
+/* Note: !important needed to override CSS injected by delimiter.js at runtime */
 .ce-delimiter {
-  line-height: 1.6em;
+  display: flex;
+  align-items: center;
   width: 100%;
-  text-align: center;
+  height: 48px;
 }
 
 .ce-delimiter::before {
-  display: inline-block;
-  content: '***';
-  font-size: 24px;
-  letter-spacing: 0.2em;
-  color: var(--text-dim);
+  display: block !important;
+  content: '' !important;
+  height: 1px !important;
+  width: 100% !important;
+  background: var(--border) !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  letter-spacing: 0 !important;
 }
 
 /* Inline toolbar */
