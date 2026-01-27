@@ -4207,12 +4207,12 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
    Note Editor Styles
    ======================================== */
 
-/* Note mode - document-style centered content */
+/* Note mode - full-width container, content centered within */
 #content-view.note-mode #content-page {
-  max-width: 900px;
+  max-width: 100%;
   width: 100%;
-  margin: 0 auto;
-  padding: 60px 40px;
+  margin: 0;
+  padding: 40px 0 0 0;
   flex: 1;
   overflow-y: auto;
   overflow-x: visible; /* Allow toolbar buttons to show outside content bounds */
@@ -4222,17 +4222,28 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
 /* Responsive padding for narrower screens */
 @media (max-width: 768px) {
   #content-view.note-mode #content-page {
-    padding: 40px 24px;
+    padding: 24px 0 0 0;
   }
 
-  .note-editor {
-    padding-left: 50px; /* Slightly less room for toolbar on mobile */
+  #content-view.note-mode #content-header {
+    padding: 0 24px 12px 50px;
+  }
+
+  .note-editor .cm-scroller {
+    justify-content: flex-start;  /* Don't center on small screens */
+  }
+
+  .note-editor .cm-content {
+    padding: 0 24px 200px 50px;  /* Less padding on mobile */
   }
 }
 
-/* Note title - larger, scrolls with content */
+/* Note title - centered with max-width to align with editor */
 #content-view.note-mode #content-header {
-  padding: 0 0 12px 0;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 40px 12px 80px;  /* Match editor content padding */
 }
 
 #content-view.note-mode #content-header-title {
@@ -4250,14 +4261,14 @@ body.solarized-mode .delete-modal-btn.cancel:hover {
   flex-direction: column;
 }
 
-/* Note editor - fills remaining space, no extra scroll */
+/* Note editor - fills remaining space, full width */
 .note-editor {
   flex: 1;
   cursor: text;
-  padding-left: 60px; /* Room for toolbar buttons on the left */
   min-height: 300px;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 /* Note body text - larger for readability */
@@ -5238,17 +5249,18 @@ h3.ce-header {
    CodeMirror Markdown Editor
    ======================================== */
 
-/* Container */
+/* Container - height auto so parent scrolls, not the editor */
 .note-editor .cm-editor {
-  height: 100%;
+  height: auto;
   min-height: 300px;
   background: transparent;
   cursor: text;
 }
 
 .note-editor .cm-scroller {
-  padding: 0 40px;
-  overflow-x: hidden;
+  display: flex;
+  justify-content: center;  /* Center the content */
+  overflow: visible !important;  /* Disable internal scrolling - let parent scroll */
   min-height: 100%;
 }
 
@@ -5257,11 +5269,11 @@ h3.ce-header {
   outline: none;
 }
 
-/* Content area - ensure it fills the space */
+/* Content area - readable max-width, centered */
 .note-editor .cm-content {
-  padding: 0;
-  padding-bottom: 200px;
-  max-width: 100%;
+  max-width: 800px;         /* Readable width */
+  width: 100%;
+  padding: 0 40px 200px 80px;  /* Left padding for block handles */
   min-height: 200px;
 }
 
