@@ -1447,8 +1447,22 @@ body.solarized-mode .web-search-dropdown {
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  overflow-y: visible;
-  padding: 0 8px;
+  overflow-y: hidden;
+  padding: 0 8px 0 0;
+  position: relative;
+}
+
+/* Border line across bottom of tabs - VS Code style */
+.header-tabs::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+  z-index: 5;
+  pointer-events: none;
 }
 
 .header-tab {
@@ -1466,8 +1480,12 @@ body.solarized-mode .web-search-dropdown {
   border: none;
   border-radius: 2px 2px 0 0;
   cursor: pointer;
-  margin: 0 1px;
+  margin: 0 1px 0 0;
   padding: 0 12px;
+}
+
+.header-tab:first-child {
+  margin-left: 0;
 }
 
 
@@ -1594,9 +1612,22 @@ body.solarized-mode .web-search-dropdown {
 .header-tab.active {
   background: var(--bg-subtle);
   color: var(--text);
-  z-index: 1;
+  z-index: 6;
   border: 1px solid var(--border);
   border-bottom: none;
+  position: relative;
+}
+
+/* Cover the tabs border line beneath active tab */
+.header-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--bg-subtle);
+  z-index: 10;
 }
 
 body.light-mode .header-tab.active {
