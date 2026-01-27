@@ -3,8 +3,8 @@
    ======================================== */
 
 :root {
-  --bg: #1A1A1A;
-  --bg-subtle: #252525;
+  --bg: #252525;
+  --bg-subtle: #1A1A1A;
   --bg-hover: rgba(255, 255, 255, 0.1);
   --text: #e0e0e0;
   --text-muted: #888;
@@ -18,8 +18,8 @@
 }
 
 body.light-mode {
-  --bg: #f8f8f8;
-  --bg-subtle: #fff;
+  --bg: #fff;
+  --bg-subtle: #f8f8f8;
   --bg-hover: rgba(0, 0, 0, 0.08);
   --text: #1a1a1a;
   --text-muted: #555;
@@ -33,8 +33,8 @@ body.light-mode {
 }
 
 body.solarized-mode {
-  --bg: #fdf6e3;           /* Base3 - cream/yellow background */
-  --bg-subtle: #eee8d5;    /* Base2 - slightly darker cream */
+  --bg: #eee8d5;           /* Base2 - slightly darker cream */
+  --bg-subtle: #fdf6e3;    /* Base3 - cream/yellow background */
   --bg-hover: rgba(0, 0, 0, 0.07);
   --text: #657b83;         /* Base00 - body text */
   --text-muted: #839496;   /* Base0 - secondary text */
