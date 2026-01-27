@@ -1192,9 +1192,10 @@ body.solarized-mode .web-search-dropdown {
   overflow: hidden;
   min-width: 0;
   background: var(--bg-subtle);
-  border-radius: 2px;
+  border-radius: 0 0 2px 2px;
   margin: 0 8px 8px 0;
   border: 1px solid var(--border);
+  border-top: none;
 }
 
 #content-view::-webkit-scrollbar {
@@ -1594,6 +1595,7 @@ body.solarized-mode .web-search-dropdown {
   color: var(--text);
   z-index: 1;
   border: 1px solid var(--border);
+  border-bottom: none;
 }
 
 body.light-mode .header-tab.active {
@@ -5508,21 +5510,24 @@ h3.ce-header {
 
 /* Add button */
 .note-editor .cm-block-add-btn {
-  width: 18px;
-  height: 18px;
-  padding: 0;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
   border: none;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-dim);
-  font-size: 14px;
-  font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.note-editor .cm-block-add-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .note-editor .cm-block-handle-wrapper:hover .cm-block-add-btn {
@@ -5535,19 +5540,22 @@ h3.ce-header {
 
 /* Drag handle */
 .note-editor .cm-block-handle {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border-radius: 3px;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-dim);
-  font-size: 10px;
-  letter-spacing: -2px;
   cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background-color 0.15s ease;
+}
+
+.note-editor .cm-block-handle svg {
+  width: 18px;
+  height: 18px;
 }
 
 .note-editor .cm-block-handle:hover {
