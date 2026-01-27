@@ -261,6 +261,22 @@ body.platform-darwin #btn-close {
   display: none;
 }
 
+/* Hover trigger zone for agent panel - appears on right edge when collapsed */
+#agent-panel-hover-trigger {
+  display: none;
+}
+
+#app.agent-panel-collapsed #agent-panel-hover-trigger {
+  display: block;
+  position: fixed;
+  top: 36px;
+  right: 0;
+  width: 8px;
+  height: calc(100vh - 36px);
+  z-index: 100;
+  cursor: pointer;
+}
+
 /* Both panels collapsed */
 #app.sidebar-collapsed.agent-panel-collapsed {
   grid-template-columns: 1fr;
@@ -282,14 +298,21 @@ body.platform-darwin #btn-close {
   -webkit-app-region: drag; /* Make header draggable */
 }
 
-/* Space for macOS traffic lights */
-body.platform-darwin #header {
-  padding-left: 78px;
+/* Traffic light spacer - space for macOS window buttons */
+.traffic-light-spacer {
+  display: none;
+  flex-shrink: 0;
 }
 
-/* Reduce traffic light space in fullscreen (they move to popout bar) */
-body.platform-darwin.fullscreen #header {
-  padding-left: 16px;
+/* Show on Mac when not in fullscreen */
+body.platform-darwin .traffic-light-spacer {
+  display: block;
+  width: 70px;
+}
+
+/* Hide in fullscreen (traffic lights move to menu bar) */
+body.platform-darwin.fullscreen .traffic-light-spacer {
+  display: none;
 }
 
 #header button,
@@ -1149,8 +1172,12 @@ body.solarized-mode .web-search-dropdown {
 }
 
 /* Agent panel toggle button in header */
+#sidebar-toggle {
+  margin-right: 4px;
+}
+
 #agent-panel-toggle {
-  margin-left: 4px;
+  margin-right: 8px;
 }
 
 /* ========================================
@@ -1400,31 +1427,25 @@ body.solarized-mode .web-search-dropdown {
   opacity: 0.6;
 }
 
+/* Header spacer - matches sidebar width to align tabs with content area */
+.header-spacer {
+  width: calc(var(--sidebar-width, 280px) - 8px);
+  flex-shrink: 0;
+}
+
+#app.sidebar-collapsed .header-spacer {
+  display: none;
+}
+
 /* Header Tabs */
 .header-tabs {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* Align tabs with content area start (sidebar-width - header-padding - toggle-button) */
-  margin-left: calc(var(--sidebar-width, 280px) - 8px - 32px);
   flex: 1;
   min-width: 0;
   overflow-x: auto;
   overflow-y: visible;
-}
-
-/* Adjust for macOS traffic light padding */
-body.platform-darwin .header-tabs {
-  margin-left: calc(var(--sidebar-width, 280px) - 78px - 32px);
-}
-
-body.platform-darwin.fullscreen .header-tabs {
-  margin-left: calc(var(--sidebar-width, 280px) - 16px - 32px);
-}
-
-/* When sidebar is collapsed, tabs start near left edge */
-#app.sidebar-collapsed .header-tabs {
-  margin-left: 12px;
 }
 
 .header-tab {

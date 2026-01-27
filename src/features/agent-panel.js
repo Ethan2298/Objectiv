@@ -2,6 +2,9 @@
  * Agent Panel Module
  *
  * Right-side agent chat panel with toggle and resize functionality.
+ * Supports two modes:
+ * - Agent: Uses backend Claude Agent SDK with tools
+ * - Ask: Direct Anthropic API for simple Q&A
  */
 
 import * as AnthropicService from '../services/anthropic-service.js';
@@ -19,6 +22,8 @@ const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 360;
 
+const AGENT_API_URL = 'http://localhost:3001/api/agent';
+
 const MODES = {
   AGENT: 'Agent',
   ASK: 'Ask'
@@ -34,6 +39,7 @@ const MODE_ICONS = {
 // ========================================
 
 let isResizing = false;
+let isHoverExpanded = false; // Track if expanded via hover
 let currentMode = MODES.AGENT;
 let messages = [];
 let isStreaming = false;
@@ -126,6 +132,41 @@ export function close() {
   app.classList.add('agent-panel-collapsed');
   localStorage.setItem(PANEL_COLLAPSED_KEY, true);
   updateToggleIcon(true);
+}
+
+// ========================================
+// Panel Hover Expand
+// ========================================
+
+/**
+ * Initialize hover-to-expand when panel is collapsed
+ */
+export function initPanelHover() {
+  const app = document.getElementById('app');
+  const agentPanel = document.getElementById('agent-panel');
+
+  if (!app || !agentPanel) return;
+
+  // Create hover trigger zone
+  const trigger = document.createElement('div');
+  trigger.id = 'agent-panel-hover-trigger';
+  app.appendChild(trigger);
+
+  // Expand on trigger hover
+  trigger.addEventListener('mouseenter', () => {
+    if (app.classList.contains('agent-panel-collapsed')) {
+      isHoverExpanded = true;
+      app.classList.remove('agent-panel-collapsed');
+    }
+  });
+
+  // Collapse when leaving panel (if hover-expanded)
+  agentPanel.addEventListener('mouseleave', () => {
+    if (isHoverExpanded) {
+      isHoverExpanded = false;
+      app.classList.add('agent-panel-collapsed');
+    }
+  });
 }
 
 // ========================================
@@ -551,6 +592,229 @@ async function sendMessage() {
   textarea.value = '';
   textarea.style.height = 'auto';
 
+  // Route to appropriate handler based on mode
+  if (currentMode === MODES.AGENT) {
+    await sendAgentMessage(content);
+  } else {
+    await sendAskMessage(content);
+  }
+}
+
+/**
+ * Send message using backend Agent SDK (Agent mode)
+ */
+async function sendAgentMessage(content) {
+  // Show typing indicator
+  showTypingIndicator();
+  isStreaming = true;
+
+  // Create abort controller for cancellation
+  currentAbortController = new AbortController();
+
+  try {
+    const response = await fetch(AGENT_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: content,
+        conversationHistory: ChatContext.getConversationHistory().slice(0, -1)
+      }),
+      signal: currentAbortController.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+
+    // Parse SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    let streamingBubble = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE events
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (!data.trim()) continue;
+
+          try {
+            const event = JSON.parse(data);
+            handleAgentEvent(event, {
+              onText: (text) => {
+                removeTypingIndicator();
+                if (!streamingBubble) {
+                  streamingBubble = createStreamingBubble();
+                }
+                writeStreamingChunk(text);
+                fullText += text;
+              },
+              onToolUse: (toolUse) => {
+                showToolUseIndicator(toolUse);
+              },
+              onToolResult: (toolResult) => {
+                handleToolResult(toolResult);
+              },
+              onDone: () => {
+                removeTypingIndicator();
+                removeToolIndicators();
+                isStreaming = false;
+                currentAbortController = null;
+                if (fullText) {
+                  finalizeStreamingBubble(fullText);
+                }
+              },
+              onError: (errorMsg) => {
+                handleApiError(new Error(errorMsg));
+              }
+            });
+          } catch (parseError) {
+            console.warn('Failed to parse SSE data:', data);
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return;
+    }
+    handleApiError(error);
+    currentAbortController = null;
+  }
+}
+
+/**
+ * Handle an event from the agent backend
+ */
+function handleAgentEvent(event, callbacks) {
+  switch (event.type) {
+    case 'text_delta':
+      // Streaming text chunk from direct API
+      if (event.text) {
+        callbacks.onText(event.text);
+      }
+      break;
+
+    case 'tool_use':
+      // Tool being invoked
+      if (event.tool) {
+        callbacks.onToolUse(event.tool);
+      }
+      break;
+
+    case 'tool_result':
+      callbacks.onToolResult(event);
+      break;
+
+    case 'done':
+      callbacks.onDone();
+      break;
+
+    case 'error':
+      callbacks.onError(event.message);
+      break;
+  }
+}
+
+/**
+ * Show tool use indicator in chat
+ */
+function showToolUseIndicator(toolUse) {
+  const container = document.getElementById('agent-panel-content');
+  if (!container) return;
+
+  // Remove existing tool indicator if any
+  const existing = container.querySelector('.tool-indicator');
+  if (existing) existing.remove();
+
+  const el = document.createElement('div');
+  el.className = 'tool-indicator';
+
+  // Format tool name nicely (replace underscores with spaces)
+  const toolName = toolUse.name.replace(/_/g, ' ');
+  el.innerHTML = `
+    <span class="tool-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+      </svg>
+    </span>
+    <span class="tool-name">${toolName}</span>
+    <span class="tool-spinner"></span>
+  `;
+
+  container.appendChild(el);
+  scrollToBottom();
+}
+
+/**
+ * Handle tool result - check for actions
+ */
+function handleToolResult(event) {
+  if (!event.result) return;
+
+  // Check if result is an action to execute
+  try {
+    const result = JSON.parse(event.result);
+    if (result.action) {
+      executeAction(result);
+    }
+  } catch {
+    // Not JSON or not an action, ignore
+  }
+}
+
+/**
+ * Execute a frontend action from tool result
+ */
+function executeAction(action) {
+  const Tabs = window.Layer?.Tabs;
+
+  switch (action.action) {
+    case 'open_note_tab':
+      if (Tabs) {
+        // Create a new tab for the note
+        const tabId = Tabs.createNewTab(action.noteName || 'Note', 'objective');
+        // Navigate to the note
+        const NavigationController = window.Layer?.NavigationController;
+        if (NavigationController) {
+          NavigationController.navigateToNote(action.noteId);
+        }
+      }
+      break;
+
+    case 'open_url_tab':
+      // Open URL in a new browser tab
+      window.open(action.url, '_blank');
+      break;
+  }
+}
+
+/**
+ * Remove tool indicators
+ */
+function removeToolIndicators() {
+  const container = document.getElementById('agent-panel-content');
+  if (!container) return;
+
+  const indicators = container.querySelectorAll('.tool-indicator');
+  indicators.forEach(el => el.remove());
+}
+
+/**
+ * Send message using direct Anthropic API (Ask mode)
+ */
+async function sendAskMessage(content) {
   // Check for API key first
   if (!AnthropicService.hasApiKey()) {
     handleApiError(new Error('NO_API_KEY'));
@@ -570,19 +834,14 @@ async function sendMessage() {
   await AnthropicService.sendMessage({
     message: content,
     mode: currentMode,
-    conversationHistory: ChatContext.getConversationHistory().slice(0, -1), // Exclude the message we just added
+    conversationHistory: ChatContext.getConversationHistory().slice(0, -1),
     signal: currentAbortController.signal,
 
     onChunk: (chunk, fullText) => {
-      // Remove typing indicator on first chunk
       removeTypingIndicator();
-
-      // Create parser if not exists
       if (!streamingBubble) {
         streamingBubble = createStreamingBubble();
       }
-
-      // Write chunk to streaming markdown parser
       writeStreamingChunk(chunk);
     },
 
@@ -590,7 +849,6 @@ async function sendMessage() {
       removeTypingIndicator();
       isStreaming = false;
       currentAbortController = null;
-
       if (fullText) {
         finalizeStreamingBubble(fullText);
       }
@@ -648,6 +906,7 @@ export function clearMessages() {
 export function init() {
   initPanelToggle();
   initPanelResize();
+  initPanelHover();
   initModeSelector();
   initTextarea();
   initChatInput();
@@ -665,6 +924,7 @@ export default {
   init,
   initPanelToggle,
   initPanelResize,
+  initPanelHover,
   initModeSelector,
   toggle,
   isCollapsed,

@@ -1,7 +1,11 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+
+// Backend server process
+let serverProcess = null;
 
 // Load .env file if it exists
 const envPath = path.join(__dirname, '.env');
@@ -18,6 +22,53 @@ if (fs.existsSync(envPath)) {
 // Groq API configuration
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
+
+// Start the backend agent server
+function startAgentServer() {
+  const serverPath = path.join(__dirname, 'server', 'index.mjs');
+
+  // Check if server file exists
+  if (!fs.existsSync(serverPath)) {
+    console.log('⚠️ Agent server not found at', serverPath);
+    return;
+  }
+
+  console.log('🚀 Starting agent server...');
+
+  // Spawn the server process with current environment
+  serverProcess = spawn('node', [serverPath], {
+    cwd: __dirname,
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  serverProcess.stdout.on('data', (data) => {
+    console.log(`[Agent Server] ${data.toString().trim()}`);
+  });
+
+  serverProcess.stderr.on('data', (data) => {
+    console.error(`[Agent Server Error] ${data.toString().trim()}`);
+  });
+
+  serverProcess.on('close', (code) => {
+    console.log(`[Agent Server] Process exited with code ${code}`);
+    serverProcess = null;
+  });
+
+  serverProcess.on('error', (err) => {
+    console.error('[Agent Server] Failed to start:', err.message);
+    serverProcess = null;
+  });
+}
+
+// Stop the backend agent server
+function stopAgentServer() {
+  if (serverProcess) {
+    console.log('🛑 Stopping agent server...');
+    serverProcess.kill();
+    serverProcess = null;
+  }
+}
 
 console.log('🔑 GROQ_API_KEY:', GROQ_API_KEY ? 'SET (' + GROQ_API_KEY.slice(0, 8) + '...)' : 'NOT SET');
 
@@ -85,6 +136,7 @@ Respond with ONLY a number 0-100, nothing else.`
 
 function createWindow() {
   const isMac = process.platform === 'darwin';
+  const iconFile = isMac ? 'icon.icns' : 'icon.ico';
 
   const win = new BrowserWindow({
     width: 1200,
@@ -92,7 +144,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#000000',
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: path.join(__dirname, iconFile),
     frame: isMac ? true : false,
     titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
     trafficLightPosition: isMac ? { x: 12, y: 11 } : undefined,
@@ -307,12 +359,23 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  // Set dock icon on Mac
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(path.join(__dirname, 'icon.png'));
+  }
+  startAgentServer();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  stopAgentServer();
 });
 
 app.on('activate', () => {
