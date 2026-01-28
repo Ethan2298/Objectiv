@@ -47,6 +47,17 @@ let currentAbortController = null;
 let currentParser = null;
 
 // ========================================
+// Chat Tabs State
+// ========================================
+
+const CHAT_TABS_KEY = 'layer-agent-chat-tabs';
+const ACTIVE_TAB_KEY = 'layer-agent-active-tab';
+
+let chatTabs = [];
+let activeTabId = null;
+let nextTabId = 1;
+
+// ========================================
 // Panel Toggle
 // ========================================
 
@@ -331,6 +342,305 @@ export function getMode() {
 }
 
 // ========================================
+// Chat Tabs
+// ========================================
+
+/**
+ * Initialize chat tabs
+ */
+export function initChatTabs() {
+  // Load saved tabs or create default
+  const savedTabs = localStorage.getItem(CHAT_TABS_KEY);
+  const savedActiveTab = localStorage.getItem(ACTIVE_TAB_KEY);
+
+  if (savedTabs) {
+    try {
+      chatTabs = JSON.parse(savedTabs);
+      nextTabId = Math.max(...chatTabs.map(t => t.id), 0) + 1;
+    } catch {
+      chatTabs = [];
+    }
+  }
+
+  // Create default tab if none exist
+  if (chatTabs.length === 0) {
+    createChatTab();
+  } else {
+    // Restore active tab
+    activeTabId = savedActiveTab ? parseInt(savedActiveTab) : chatTabs[0].id;
+    if (!chatTabs.find(t => t.id === activeTabId)) {
+      activeTabId = chatTabs[0].id;
+    }
+  }
+
+  // Render tabs
+  renderChatTabs();
+
+  // Load active tab's messages
+  loadTabMessages(activeTabId);
+
+  // Set up event listeners
+  initTabEventListeners();
+}
+
+/**
+ * Create a new chat tab
+ * @param {string} title - Optional title for the tab
+ * @returns {number} The new tab's ID
+ */
+export function createChatTab(title = 'New Chat') {
+  const tab = {
+    id: nextTabId++,
+    title,
+    messages: [],
+    createdAt: Date.now()
+  };
+
+  chatTabs.push(tab);
+  saveChatTabs();
+
+  // Switch to new tab
+  switchToTab(tab.id);
+  renderChatTabs();
+
+  return tab.id;
+}
+
+/**
+ * Switch to a specific tab
+ * @param {number} tabId
+ */
+export function switchToTab(tabId) {
+  const tab = chatTabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  // Save current tab's messages before switching
+  if (activeTabId) {
+    saveCurrentTabMessages();
+  }
+
+  activeTabId = tabId;
+  localStorage.setItem(ACTIVE_TAB_KEY, tabId);
+
+  // Load new tab's messages
+  loadTabMessages(tabId);
+  renderChatTabs();
+}
+
+/**
+ * Close a chat tab
+ * @param {number} tabId
+ */
+export function closeChatTab(tabId) {
+  const index = chatTabs.findIndex(t => t.id === tabId);
+  if (index === -1) return;
+
+  // Don't close the last tab
+  if (chatTabs.length === 1) {
+    // Just clear the messages instead
+    clearMessages();
+    chatTabs[0].messages = [];
+    chatTabs[0].title = 'New Chat';
+    saveChatTabs();
+    renderChatTabs();
+    return;
+  }
+
+  // Remove the tab
+  chatTabs.splice(index, 1);
+  saveChatTabs();
+
+  // If closing active tab, switch to another
+  if (activeTabId === tabId) {
+    const newIndex = Math.min(index, chatTabs.length - 1);
+    switchToTab(chatTabs[newIndex].id);
+  } else {
+    renderChatTabs();
+  }
+}
+
+/**
+ * Save current tab's messages
+ */
+function saveCurrentTabMessages() {
+  const tab = chatTabs.find(t => t.id === activeTabId);
+  if (tab) {
+    tab.messages = [...messages];
+    // Update title based on first user message if still "New Chat"
+    if (tab.title === 'New Chat' && messages.length > 0) {
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      if (firstUserMsg) {
+        tab.title = firstUserMsg.content.substring(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '');
+      }
+    }
+    saveChatTabs();
+  }
+}
+
+/**
+ * Load a tab's messages into the UI
+ * @param {number} tabId
+ */
+function loadTabMessages(tabId) {
+  const tab = chatTabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  // Clear current messages from UI
+  const container = document.getElementById('agent-panel-content');
+  if (container) {
+    container.innerHTML = '';
+  }
+
+  // Load tab's messages
+  messages = [...tab.messages];
+  ChatContext.clearHistory();
+
+  // Render all messages and rebuild context
+  for (const msg of messages) {
+    renderMessage(msg);
+    ChatContext.addMessage(msg.role, msg.content);
+  }
+
+  scrollToBottom();
+}
+
+/**
+ * Save chat tabs to localStorage
+ */
+function saveChatTabs() {
+  localStorage.setItem(CHAT_TABS_KEY, JSON.stringify(chatTabs));
+}
+
+/**
+ * Render chat tabs to the DOM
+ */
+function renderChatTabs() {
+  const container = document.querySelector('.agent-panel-tabs');
+  if (!container) return;
+
+  // Clear existing tabs (except the add button)
+  const addBtn = container.querySelector('.tab-add');
+  container.innerHTML = '';
+
+  // Render each tab
+  for (const tab of chatTabs) {
+    const tabEl = document.createElement('div');
+    tabEl.className = `agent-panel-tab${tab.id === activeTabId ? ' active' : ''}`;
+    tabEl.dataset.tabId = tab.id;
+
+    tabEl.innerHTML = `
+      <span class="tab-content">
+        <span class="tab-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <span class="tab-title">${escapeHtml(tab.title)}</span>
+        <button class="tab-close" aria-label="Close tab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </span>
+    `;
+
+    container.appendChild(tabEl);
+  }
+
+  // Re-add the add button
+  if (addBtn) {
+    container.appendChild(addBtn);
+  } else {
+    const newAddBtn = document.createElement('button');
+    newAddBtn.className = 'tab-add';
+    newAddBtn.setAttribute('aria-label', 'New chat');
+    newAddBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`;
+    container.appendChild(newAddBtn);
+  }
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Initialize tab event listeners
+ */
+function initTabEventListeners() {
+  const container = document.querySelector('.agent-panel-tabs');
+  if (!container) return;
+
+  container.addEventListener('click', (e) => {
+    // Handle tab click
+    const tabEl = e.target.closest('.agent-panel-tab');
+    if (tabEl && !e.target.closest('.tab-close')) {
+      const tabId = parseInt(tabEl.dataset.tabId);
+      if (tabId !== activeTabId) {
+        switchToTab(tabId);
+      }
+      return;
+    }
+
+    // Handle close button click
+    const closeBtn = e.target.closest('.tab-close');
+    if (closeBtn) {
+      const tabEl = closeBtn.closest('.agent-panel-tab');
+      if (tabEl) {
+        const tabId = parseInt(tabEl.dataset.tabId);
+        closeChatTab(tabId);
+      }
+      return;
+    }
+
+    // Handle add button click
+    const addBtn = e.target.closest('.tab-add');
+    if (addBtn) {
+      createChatTab();
+      return;
+    }
+  });
+
+  // Handle history button
+  const historyBtn = document.querySelector('.agent-panel-actions .agent-header-btn[title="History"]');
+  if (historyBtn) {
+    historyBtn.addEventListener('click', showChatHistory);
+  }
+}
+
+/**
+ * Show chat history menu
+ */
+function showChatHistory() {
+  const historyBtn = document.querySelector('.agent-panel-actions .agent-header-btn[title="History"]');
+  if (!historyBtn) return;
+
+  const rect = historyBtn.getBoundingClientRect();
+
+  const ContextMenu = window.Layer?.ContextMenu;
+  if (!ContextMenu) return;
+
+  const items = chatTabs.map(tab => ({
+    label: tab.title,
+    action: () => switchToTab(tab.id)
+  }));
+
+  if (items.length === 0) {
+    items.push({ label: 'No chat history', disabled: true });
+  }
+
+  ContextMenu.showContextMenu({
+    x: rect.right,
+    y: rect.bottom + 4,
+    items
+  });
+}
+
+// ========================================
 // Auto-expand Textarea
 // ========================================
 
@@ -369,6 +679,9 @@ function addMessage(content, role) {
   messages.push(message);
   renderMessage(message);
   scrollToBottom();
+
+  // Save to current tab
+  saveCurrentTabMessages();
 }
 
 /**
@@ -512,6 +825,9 @@ function finalizeStreamingBubble(content) {
 
   // Add to conversation context
   ChatContext.addMessage('assistant', content);
+
+  // Save to current tab
+  saveCurrentTabMessages();
 }
 
 /**
@@ -897,6 +1213,13 @@ export function clearMessages() {
   if (container) {
     container.innerHTML = '';
   }
+
+  // Update current tab
+  const tab = chatTabs.find(t => t.id === activeTabId);
+  if (tab) {
+    tab.messages = [];
+    saveChatTabs();
+  }
 }
 
 // ========================================
@@ -910,6 +1233,7 @@ export function init() {
   initModeSelector();
   initTextarea();
   initChatInput();
+  initChatTabs();
 
   // Set initial toggle icon state
   const collapsed = localStorage.getItem(PANEL_COLLAPSED_KEY) !== 'false';
@@ -926,6 +1250,7 @@ export default {
   initPanelResize,
   initPanelHover,
   initModeSelector,
+  initChatTabs,
   toggle,
   isCollapsed,
   open,
@@ -935,5 +1260,8 @@ export default {
   setMode,
   getMode,
   clearMessages,
-  cancelStream
+  cancelStream,
+  createChatTab,
+  switchToTab,
+  closeChatTab
 };

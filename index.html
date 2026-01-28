@@ -154,6 +154,26 @@
       <!-- Agent Panel (right side) -->
       <div id="agent-panel">
         <div id="agent-panel-resize-handle"></div>
+        <div id="agent-panel-header">
+          <div class="agent-panel-tabs">
+            <div class="agent-panel-tab active">
+              <span class="tab-content">
+                <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+                <span class="tab-title">New Chat</span>
+                <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+              </span>
+            </div>
+            <button class="tab-add" aria-label="New chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
+          </div>
+          <div class="agent-panel-actions">
+            <button class="agent-header-btn" title="History">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </button>
+          </div>
+        </div>
         <div id="agent-panel-content">
           <!-- Chat messages will appear here -->
         </div>
