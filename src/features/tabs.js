@@ -92,9 +92,11 @@ function syncDomWithState() {
       tab.className = 'header-tab' + (tabId === activeTabId ? ' active' : '');
       tab.dataset.tabId = tabId;
       tab.innerHTML = `
-        <span class="tab-icon">${getTabIconHtml(tabData.icon)}</span>
-        <span class="tab-title">${escapeHtml(tabData.title)}</span>
-        <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        <span class="tab-content">
+          <span class="tab-icon">${getTabIconHtml(tabData.icon)}</span>
+          <span class="tab-title">${escapeHtml(tabData.title)}</span>
+          <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </span>
       `;
       tabsContainer.insertBefore(tab, addBtn);
     }
@@ -258,9 +260,11 @@ function handleCreateTab() {
   tab.className = 'header-tab active';
   tab.dataset.tabId = newTabId;
   tab.innerHTML = `
-    <span class="tab-icon">${getIconSvgInline('home')}</span>
-    <span class="tab-title">Home</span>
-    <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <span class="tab-content">
+      <span class="tab-icon">${getIconSvgInline('home')}</span>
+      <span class="tab-title">Home</span>
+      <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </span>
   `;
 
   // Remove active class from other tabs
@@ -303,9 +307,11 @@ export function createNewTab(title = 'New Tab', icon = 'home') {
   tab.className = 'header-tab active';
   tab.dataset.tabId = newTabId;
   tab.innerHTML = `
-    <span class="tab-icon">${getIconSvgInline(icon)}</span>
-    <span class="tab-title">${title}</span>
-    <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <span class="tab-content">
+      <span class="tab-icon">${getIconSvgInline(icon)}</span>
+      <span class="tab-title">${title}</span>
+      <button class="tab-close" aria-label="Close tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </span>
   `;
 
   // Insert before the add button
@@ -370,9 +376,10 @@ export function updateActiveTabIcon(icon) {
     if (!iconEl) {
       iconEl = document.createElement('span');
       iconEl.className = 'tab-icon';
+      const contentEl = activeTabEl.querySelector('.tab-content');
       const titleEl = activeTabEl.querySelector('.tab-title');
-      if (titleEl) {
-        activeTabEl.insertBefore(iconEl, titleEl);
+      if (contentEl && titleEl) {
+        contentEl.insertBefore(iconEl, titleEl);
       }
     }
 
@@ -398,9 +405,10 @@ export function updateTabIconById(tabId, icon) {
     if (!iconEl) {
       iconEl = document.createElement('span');
       iconEl.className = 'tab-icon';
+      const contentEl = tabEl.querySelector('.tab-content');
       const titleEl = tabEl.querySelector('.tab-title');
-      if (titleEl) {
-        tabEl.insertBefore(iconEl, titleEl);
+      if (contentEl && titleEl) {
+        contentEl.insertBefore(iconEl, titleEl);
       }
     }
 
@@ -433,9 +441,10 @@ export function showAudioIndicator(tabId) {
   indicator.title = 'Playing audio';
 
   // Insert after the icon, before the title
+  const contentEl = tabEl.querySelector('.tab-content');
   const titleEl = tabEl.querySelector('.tab-title');
-  if (titleEl) {
-    tabEl.insertBefore(indicator, titleEl);
+  if (contentEl && titleEl) {
+    contentEl.insertBefore(indicator, titleEl);
   }
 
   // Add class to tab for styling
