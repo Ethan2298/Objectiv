@@ -242,6 +242,91 @@ export const tools = [
       },
       required: ['url']
     }
+  },
+  // ========================================
+  // Folder Management Tools
+  // ========================================
+  {
+    name: 'list_folders',
+    description: 'List all folders with hierarchy info (id, name, parent_id, order_index)',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: 'create_folder',
+    description: 'Create a new folder',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Folder name'
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Optional parent folder ID for nesting'
+        }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'move_folder',
+    description: 'Move a folder to a different parent (or to root)',
+    input_schema: {
+      type: 'object',
+      properties: {
+        folder_id: {
+          type: 'string',
+          description: 'Folder to move'
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Target parent folder ID (omit for root)'
+        }
+      },
+      required: ['folder_id']
+    }
+  },
+  {
+    name: 'move_item_to_folder',
+    description: 'Move a note, objective, or task_list into a folder',
+    input_schema: {
+      type: 'object',
+      properties: {
+        item_type: {
+          type: 'string',
+          enum: ['note', 'objective', 'task_list'],
+          description: 'Type of item to move'
+        },
+        item_id: {
+          type: 'string',
+          description: 'Item UUID'
+        },
+        folder_id: {
+          type: 'string',
+          description: 'Target folder ID (omit for unfiled)'
+        }
+      },
+      required: ['item_type', 'item_id']
+    }
+  },
+  {
+    name: 'delete_folder',
+    description: 'Delete a folder. Contents (items and child folders) move up to the parent folder.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        folder_id: {
+          type: 'string',
+          description: 'Folder to delete'
+        }
+      },
+      required: ['folder_id']
+    }
   }
 ];
 
@@ -541,5 +626,226 @@ export const toolHandlers = {
       url,
       title: title || 'Web'
     });
+  },
+
+  // ========================================
+  // Folder Management Handlers
+  // ========================================
+
+  list_folders: async () => {
+    if (!isAvailable()) {
+      return 'Error: Supabase not configured';
+    }
+
+    const { data, error } = await supabase
+      .from('folders')
+      .select('id, name, parent_id, order_index, created_at, updated_at')
+      .order('order_index', { ascending: true });
+
+    if (error) {
+      return `Error listing folders: ${error.message}`;
+    }
+
+    return JSON.stringify(data, null, 2);
+  },
+
+  create_folder: async ({ name, parent_id }) => {
+    if (!isAvailable()) {
+      return 'Error: Supabase not configured';
+    }
+
+    const record = {
+      name,
+      parent_id: parent_id || null,
+      order_index: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('folders')
+      .insert(record)
+      .select()
+      .single();
+
+    if (error) {
+      return `Error creating folder: ${error.message}`;
+    }
+
+    return `Folder created successfully:\n${JSON.stringify(data, null, 2)}`;
+  },
+
+  move_folder: async ({ folder_id, parent_id }) => {
+    if (!isAvailable()) {
+      return 'Error: Supabase not configured';
+    }
+
+    // Prevent moving folder into itself
+    if (folder_id === parent_id) {
+      return 'Error: Cannot move a folder into itself';
+    }
+
+    // Check if target parent exists (if specified)
+    if (parent_id) {
+      const { data: parentFolder, error: parentError } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('id', parent_id)
+        .single();
+
+      if (parentError || !parentFolder) {
+        return `Error: Target parent folder not found: ${parent_id}`;
+      }
+
+      // Prevent circular reference - ensure parent_id is not a descendant of folder_id
+      // Simple check: walk up from parent_id and make sure we don't hit folder_id
+      let currentId = parent_id;
+      while (currentId) {
+        const { data: current } = await supabase
+          .from('folders')
+          .select('parent_id')
+          .eq('id', currentId)
+          .single();
+
+        if (!current) break;
+        if (current.parent_id === folder_id) {
+          return 'Error: Cannot move a folder into one of its descendants';
+        }
+        currentId = current.parent_id;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('folders')
+      .update({
+        parent_id: parent_id || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', folder_id)
+      .select()
+      .single();
+
+    if (error) {
+      return `Error moving folder: ${error.message}`;
+    }
+
+    return `Folder moved successfully:\n${JSON.stringify(data, null, 2)}`;
+  },
+
+  move_item_to_folder: async ({ item_type, item_id, folder_id }) => {
+    if (!isAvailable()) {
+      return 'Error: Supabase not configured';
+    }
+
+    // Determine the table based on item type
+    const tableMap = {
+      note: 'notes',
+      objective: 'objectives',
+      task_list: 'task_lists'
+    };
+
+    const table = tableMap[item_type];
+    if (!table) {
+      return `Error: Invalid item_type "${item_type}". Must be one of: note, objective, task_list`;
+    }
+
+    // Verify folder exists (if specified)
+    if (folder_id) {
+      const { data: folder, error: folderError } = await supabase
+        .from('folders')
+        .select('id')
+        .eq('id', folder_id)
+        .single();
+
+      if (folderError || !folder) {
+        return `Error: Folder not found: ${folder_id}`;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from(table)
+      .update({
+        folder_id: folder_id || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', item_id)
+      .select()
+      .single();
+
+    if (error) {
+      return `Error moving ${item_type}: ${error.message}`;
+    }
+
+    const locationText = folder_id ? `into folder ${folder_id}` : 'to unfiled';
+    return `${item_type} moved ${locationText}:\n${JSON.stringify(data, null, 2)}`;
+  },
+
+  delete_folder: async ({ folder_id }) => {
+    if (!isAvailable()) {
+      return 'Error: Supabase not configured';
+    }
+
+    // Get the folder's parent_id so we can move contents up
+    const { data: folder, error: fetchError } = await supabase
+      .from('folders')
+      .select('parent_id')
+      .eq('id', folder_id)
+      .single();
+
+    if (fetchError) {
+      return `Error fetching folder: ${fetchError.message}`;
+    }
+
+    const parentId = folder?.parent_id || null;
+
+    // Move child folders up to the parent
+    const { error: childError } = await supabase
+      .from('folders')
+      .update({ parent_id: parentId, updated_at: new Date().toISOString() })
+      .eq('parent_id', folder_id);
+
+    if (childError) {
+      return `Error moving child folders: ${childError.message}`;
+    }
+
+    // Move notes up to the parent
+    const { error: notesError } = await supabase
+      .from('notes')
+      .update({ folder_id: parentId, updated_at: new Date().toISOString() })
+      .eq('folder_id', folder_id);
+
+    if (notesError) {
+      return `Error moving notes: ${notesError.message}`;
+    }
+
+    // Move objectives up to the parent
+    const { error: objectivesError } = await supabase
+      .from('objectives')
+      .update({ folder_id: parentId, updated_at: new Date().toISOString() })
+      .eq('folder_id', folder_id);
+
+    if (objectivesError) {
+      return `Error moving objectives: ${objectivesError.message}`;
+    }
+
+    // Move task_lists up to the parent (if table exists)
+    await supabase
+      .from('task_lists')
+      .update({ folder_id: parentId, updated_at: new Date().toISOString() })
+      .eq('folder_id', folder_id);
+    // Ignore error if task_lists table doesn't exist
+
+    // Delete the folder
+    const { error } = await supabase
+      .from('folders')
+      .delete()
+      .eq('id', folder_id);
+
+    if (error) {
+      return `Error deleting folder: ${error.message}`;
+    }
+
+    const locationText = parentId ? `parent folder ${parentId}` : 'root';
+    return `Folder deleted successfully: ${folder_id}. Contents moved to ${locationText}.`;
   }
 };
