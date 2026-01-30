@@ -110,6 +110,13 @@ export function switchTab(tabId) {
   if (!state.tabs.has(tabId)) return false;
   state.activeTabId = tabId;
   saveToStorage();
+
+  // Notify selection listeners so active-tab chip updates to match the new tab's selection
+  const tab = state.tabs.get(tabId);
+  if (tab && tab.selection) {
+    for (const fn of selectionListeners) fn(tab.selection);
+  }
+
   return true;
 }
 

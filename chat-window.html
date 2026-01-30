@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>Chat</title>
+  <link rel="stylesheet" href="src/styles.css">
+  <script>window.__DOPPLER_SECRETS__ = window.__DOPPLER_SECRETS__ || {};</script>
+  <script src="doppler-secrets.js" onerror="console.log('doppler-secrets.js not found')"></script>
+  <script type="module" src="src/features/chat-window.js"></script>
+</head>
+<body class="chat-window-standalone">
+  <div id="chat-window">
+    <div id="agent-panel-header">
+      <div class="agent-panel-tabs">
+        <button class="tab-add" aria-label="New chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <div class="agent-panel-actions">
+        <button class="agent-header-btn" title="History">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="agent-panel-content"></div>
+    <div id="agent-panel-input">
+      <div id="agent-context-chips"></div>
+      <textarea id="agent-input-text" placeholder="Message..." rows="1"></textarea>
+      <div id="agent-input-footer">
+        <div class="agent-input-footer-left">
+          <button id="agent-input-pill" type="button">
+            <svg id="agent-mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            <span id="agent-mode-label">Agent</span>
+            <svg class="agent-pill-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <button id="agent-context-btn" type="button" title="Attach context">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>
+            </svg>
+            <span>Add context</span>
+          </button>
+        </div>
+        <button id="agent-send-btn" type="button" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19V5M5 12l7-7 7 7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

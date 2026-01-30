@@ -865,7 +865,8 @@ function tearOffTab(tabId, screenX, screenY) {
   const transferData = {
     messages: tab.messages,
     mode: tab.mode || currentMode,
-    title: tab.title
+    title: tab.title,
+    selectedContext: tab.selectedContext || []
   };
   localStorage.setItem(transferKey, JSON.stringify(transferData));
 
@@ -1659,6 +1660,11 @@ export function clearMessages() {
 
 let contextMenuEl = null;
 
+// BroadcastChannel for syncing selection changes to torn-off windows
+const selectionBroadcast = (typeof BroadcastChannel !== 'undefined')
+  ? new BroadcastChannel('layer-selection-sync')
+  : null;
+
 /**
  * Initialize the @ context button
  */
@@ -1916,6 +1922,11 @@ const SELECTION_TYPE_MAP = {
  * Swaps the active-tab chip to match the new selection.
  */
 function handleSelectionChange({ id, type }) {
+  // Broadcast to torn-off windows
+  if (selectionBroadcast) {
+    try { selectionBroadcast.postMessage({ id, type }); } catch { /* ignore */ }
+  }
+
   const tab = chatTabs.find(t => t.id === activeTabId);
   if (!tab) return;
   if (!tab.selectedContext) tab.selectedContext = [];
