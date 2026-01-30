@@ -10,7 +10,7 @@ import {
   ANTHROPIC_API_ENDPOINT,
   ANTHROPIC_MODEL,
   ANTHROPIC_MAX_TOKENS,
-  OPENROUTER_API_ENDPOINT,
+  GROQ_API_ENDPOINT,
   MODEL_OPTIONS
 } from '../config.js';
 
@@ -40,8 +40,8 @@ export function getSelectedModelConfig() {
  */
 export function getApiKey() {
   const model = getSelectedModelConfig();
-  if (model.provider === 'openrouter') {
-    return window.__DOPPLER_SECRETS__?.OPENROUTER_API_KEY || null;
+  if (model.provider === 'groq') {
+    return window.__DOPPLER_SECRETS__?.GROQ_API_KEY || null;
   }
   return window.__DOPPLER_SECRETS__?.ANTHROPIC_API_KEY || null;
 }
@@ -88,8 +88,8 @@ export async function sendMessage({
 
   const model = getSelectedModelConfig();
 
-  if (model.provider === 'openrouter') {
-    return sendOpenRouterMessage({ message, mode, conversationHistory, onChunk, onComplete, onError, signal, apiKey, model });
+  if (model.provider === 'groq') {
+    return sendGroqMessage({ message, mode, conversationHistory, onChunk, onComplete, onError, signal, apiKey, model });
   }
 
   return sendAnthropicMessage({ message, mode, conversationHistory, onChunk, onComplete, onError, signal, apiKey });
@@ -200,10 +200,10 @@ async function sendAnthropicMessage({ message, mode, conversationHistory, onChun
 }
 
 // ========================================
-// OpenRouter Provider (OpenAI-compatible)
+// Groq Provider (OpenAI-compatible)
 // ========================================
 
-async function sendOpenRouterMessage({ message, mode, conversationHistory, onChunk, onComplete, onError, signal, apiKey, model }) {
+async function sendGroqMessage({ message, mode, conversationHistory, onChunk, onComplete, onError, signal, apiKey, model }) {
   const systemPrompt = mode === 'Agent'
     ? 'You are a helpful assistant that helps users accomplish tasks. Break down complex tasks into clear, actionable steps. Be concise but thorough. Focus on practical solutions.'
     : 'You are a helpful assistant that answers questions clearly and concisely. Provide accurate, well-structured information. If you\'re unsure about something, say so.';
@@ -215,7 +215,7 @@ async function sendOpenRouterMessage({ message, mode, conversationHistory, onChu
   ];
 
   try {
-    const response = await fetch(OPENROUTER_API_ENDPOINT, {
+    const response = await fetch(GROQ_API_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
