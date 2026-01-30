@@ -42,9 +42,6 @@ let isResizing = false;
 let isHoverExpanded = false; // Track if expanded via hover
 let currentMode = MODES.AGENT;
 let messages = [];
-let isStreaming = false;
-let currentAbortController = null;
-let currentParser = null;
 
 // ========================================
 // Chat Tabs State
@@ -56,6 +53,38 @@ const ACTIVE_TAB_KEY = 'layer-agent-active-tab';
 let chatTabs = [];
 let activeTabId = null;
 let nextTabId = 1;
+
+// Per-tab streaming state: tabId -> { abortController, parser, isStreaming, accumulatedText }
+const tabStreamState = new Map();
+
+function getTabStream(tabId) {
+  if (!tabStreamState.has(tabId)) {
+    tabStreamState.set(tabId, {
+      abortController: null,
+      parser: null,
+      isStreaming: false,
+      accumulatedText: ''
+    });
+  }
+  return tabStreamState.get(tabId);
+}
+
+function cleanupTabStream(tabId) {
+  const state = tabStreamState.get(tabId);
+  if (state) {
+    if (state.abortController) {
+      state.abortController.abort();
+      state.abortController = null;
+    }
+    if (state.parser) {
+      try { smd.parser_end(state.parser); } catch { /* ignore */ }
+      state.parser = null;
+    }
+    state.isStreaming = false;
+    state.accumulatedText = '';
+  }
+  tabStreamState.delete(tabId);
+}
 
 // ========================================
 // Panel Toggle
@@ -322,6 +351,13 @@ export function setMode(mode) {
   currentMode = mode;
   localStorage.setItem(PANEL_MODE_KEY, mode);
 
+  // Save mode to active tab
+  const tab = chatTabs.find(t => t.id === activeTabId);
+  if (tab) {
+    tab.mode = mode;
+    saveChatTabs();
+  }
+
   const label = document.getElementById('agent-mode-label');
   if (label) {
     label.textContent = mode;
@@ -379,6 +415,12 @@ export function initChatTabs() {
   // Load active tab's messages
   loadTabMessages(activeTabId);
 
+  // Restore active tab's mode
+  const activeTab = chatTabs.find(t => t.id === activeTabId);
+  if (activeTab && activeTab.mode) {
+    setMode(activeTab.mode);
+  }
+
   // Set up event listeners
   initTabEventListeners();
 }
@@ -393,7 +435,9 @@ export function createChatTab(title = 'New Chat') {
     id: nextTabId++,
     title,
     messages: [],
-    createdAt: Date.now()
+    mode: currentMode, // inherit current mode as default
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
 
   chatTabs.push(tab);
@@ -414,6 +458,15 @@ export function switchToTab(tabId) {
   const tab = chatTabs.find(t => t.id === tabId);
   if (!tab) return;
 
+  // If the current tab is streaming, detach its parser from DOM (stream continues in background)
+  const prevStream = activeTabId ? getTabStream(activeTabId) : null;
+  if (prevStream && prevStream.isStreaming && prevStream.parser) {
+    // Detach: end the current DOM parser, but keep the stream running
+    // The stream callbacks will accumulate text in memory via accumulatedText
+    try { smd.parser_end(prevStream.parser); } catch { /* ignore */ }
+    prevStream.parser = null;
+  }
+
   // Save current tab's messages before switching
   if (activeTabId) {
     saveCurrentTabMessages();
@@ -424,6 +477,17 @@ export function switchToTab(tabId) {
 
   // Load new tab's messages
   loadTabMessages(tabId);
+
+  // If the target tab is streaming in the background, re-attach its output to DOM
+  const targetStream = getTabStream(tabId);
+  if (targetStream.isStreaming) {
+    reattachStreamingBubble(tabId, targetStream);
+  }
+
+  // Restore per-tab mode
+  const tabMode = tab.mode || MODES.AGENT;
+  setMode(tabMode);
+
   renderChatTabs();
 }
 
@@ -434,6 +498,9 @@ export function switchToTab(tabId) {
 export function closeChatTab(tabId) {
   const index = chatTabs.findIndex(t => t.id === tabId);
   if (index === -1) return;
+
+  // Abort any active stream for this tab
+  cleanupTabStream(tabId);
 
   // Don't close the last tab
   if (chatTabs.length === 1) {
@@ -466,6 +533,7 @@ function saveCurrentTabMessages() {
   const tab = chatTabs.find(t => t.id === activeTabId);
   if (tab) {
     tab.messages = [...messages];
+    tab.updatedAt = Date.now();
     // Update title based on first user message if still "New Chat"
     if (tab.title === 'New Chat' && messages.length > 0) {
       const firstUserMsg = messages.find(m => m.role === 'user');
@@ -605,6 +673,19 @@ function initTabEventListeners() {
     }
   });
 
+  // Double-click to rename tab
+  container.addEventListener('dblclick', (e) => {
+    const tabEl = e.target.closest('.agent-panel-tab');
+    if (!tabEl) return;
+
+    const tabId = parseInt(tabEl.dataset.tabId);
+    const titleEl = tabEl.querySelector('.tab-title');
+    if (!titleEl || titleEl.contentEditable === 'true') return;
+
+    e.preventDefault();
+    startTabRename(tabId, titleEl);
+  });
+
   // Handle history button
   const historyBtn = document.querySelector('.agent-panel-actions .agent-header-btn[title="History"]');
   if (historyBtn) {
@@ -638,6 +719,71 @@ function showChatHistory() {
     y: rect.bottom + 4,
     items
   });
+}
+
+// ========================================
+// Tab Rename
+// ========================================
+
+/**
+ * Start inline rename for a tab title
+ * @param {number} tabId
+ * @param {HTMLElement} titleEl
+ */
+function startTabRename(tabId, titleEl) {
+  const tab = chatTabs.find(t => t.id === tabId);
+  if (!tab) return;
+
+  const originalTitle = tab.title;
+
+  titleEl.contentEditable = 'true';
+  titleEl.classList.add('editing');
+  titleEl.focus();
+
+  // Select all text
+  const range = document.createRange();
+  range.selectNodeContents(titleEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  const finishRename = (save) => {
+    titleEl.contentEditable = 'false';
+    titleEl.classList.remove('editing');
+
+    if (save) {
+      const newTitle = titleEl.textContent.trim();
+      if (newTitle && newTitle !== originalTitle) {
+        tab.title = newTitle;
+        saveChatTabs();
+      } else {
+        titleEl.textContent = originalTitle;
+      }
+    } else {
+      titleEl.textContent = originalTitle;
+    }
+
+    // Clean up listeners
+    titleEl.removeEventListener('keydown', onKeyDown);
+    titleEl.removeEventListener('blur', onBlur);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishRename(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finishRename(false);
+    }
+  };
+
+  const onBlur = () => {
+    finishRename(true);
+  };
+
+  titleEl.addEventListener('keydown', onKeyDown);
+  titleEl.addEventListener('blur', onBlur);
 }
 
 // ========================================
@@ -754,11 +900,13 @@ function removeTypingIndicator() {
 }
 
 /**
- * Create an empty streaming bubble for assistant response
- * Initializes the streaming markdown parser
- * @returns {Object} Parser instance
+ * Create an empty streaming bubble for assistant response (only when tab is active)
+ * @param {number} tabId - The tab this bubble belongs to
+ * @returns {Object} Parser instance or null if tab is not active
  */
-function createStreamingBubble() {
+function createStreamingBubble(tabId) {
+  if (tabId !== activeTabId) return null;
+
   const container = document.getElementById('agent-panel-content');
   if (!container) return null;
 
@@ -774,60 +922,109 @@ function createStreamingBubble() {
   container.appendChild(el);
   scrollToBottom();
 
-  // Initialize streaming markdown parser
+  // Initialize streaming markdown parser and store on tab stream state
   const renderer = smd.default_renderer(bubble);
-  currentParser = smd.parser(renderer);
+  const stream = getTabStream(tabId);
+  stream.parser = smd.parser(renderer);
 
-  return currentParser;
+  return stream.parser;
 }
 
 /**
- * Write a chunk to the streaming markdown parser
+ * Re-attach a streaming bubble for a tab that was streaming in the background.
+ * Renders accumulated text and creates a new live parser for ongoing chunks.
+ * @param {number} tabId
+ * @param {Object} stream - The tab's stream state
+ */
+function reattachStreamingBubble(tabId, stream) {
+  const container = document.getElementById('agent-panel-content');
+  if (!container) return;
+
+  const el = document.createElement('div');
+  el.className = 'chat-message chat-message-assistant';
+  el.id = 'streaming-message';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble chat-bubble-markdown';
+  bubble.id = 'streaming-bubble';
+
+  el.appendChild(bubble);
+  container.appendChild(el);
+
+  // Render all accumulated text so far
+  const renderer = smd.default_renderer(bubble);
+  stream.parser = smd.parser(renderer);
+  if (stream.accumulatedText) {
+    smd.parser_write(stream.parser, stream.accumulatedText);
+  }
+
+  scrollToBottom();
+}
+
+/**
+ * Write a chunk to the streaming markdown parser for a specific tab.
+ * If the tab is active, writes to DOM. Always accumulates in memory.
+ * @param {number} tabId - The originating tab
  * @param {string} chunk - New chunk of text
  */
-function writeStreamingChunk(chunk) {
-  if (currentParser) {
-    smd.parser_write(currentParser, chunk);
+function writeStreamingChunk(tabId, chunk) {
+  const stream = getTabStream(tabId);
+  stream.accumulatedText += chunk;
+
+  if (stream.parser && tabId === activeTabId) {
+    smd.parser_write(stream.parser, chunk);
     scrollToBottom();
   }
 }
 
 /**
- * Finalize streaming bubble (end parser and clean up)
+ * Finalize streaming bubble (end parser and clean up) for a specific tab.
+ * @param {number} tabId - The originating tab
  * @param {string} content - Final content for context
  */
-function finalizeStreamingBubble(content) {
+function finalizeStreamingBubble(tabId, content) {
+  const stream = getTabStream(tabId);
+
   // End the parser to flush any remaining content
-  if (currentParser) {
-    smd.parser_end(currentParser);
-    currentParser = null;
+  if (stream.parser) {
+    smd.parser_end(stream.parser);
+    stream.parser = null;
+  }
+  stream.isStreaming = false;
+  stream.accumulatedText = '';
+
+  // Clean up DOM ids if this tab is active
+  if (tabId === activeTabId) {
+    const el = document.getElementById('streaming-message');
+    const bubble = document.getElementById('streaming-bubble');
+    if (el) {
+      el.removeAttribute('id');
+      el.dataset.messageId = Date.now();
+    }
+    if (bubble) {
+      bubble.removeAttribute('id');
+    }
   }
 
-  const el = document.getElementById('streaming-message');
-  const bubble = document.getElementById('streaming-bubble');
+  // Add to the tab's messages
+  const tab = chatTabs.find(t => t.id === tabId);
+  if (tab) {
+    const msg = {
+      id: Date.now(),
+      content,
+      role: 'assistant',
+      timestamp: new Date()
+    };
+    tab.messages.push(msg);
+    tab.updatedAt = Date.now();
+    saveChatTabs();
 
-  if (el) {
-    el.removeAttribute('id');
-    el.dataset.messageId = Date.now();
+    // If this is the active tab, sync the in-memory messages array too
+    if (tabId === activeTabId) {
+      messages.push(msg);
+      ChatContext.addMessage('assistant', content);
+    }
   }
-
-  if (bubble) {
-    bubble.removeAttribute('id');
-  }
-
-  // Add to messages array
-  messages.push({
-    id: Date.now(),
-    content,
-    role: 'assistant',
-    timestamp: new Date()
-  });
-
-  // Add to conversation context
-  ChatContext.addMessage('assistant', content);
-
-  // Save to current tab
-  saveCurrentTabMessages();
 }
 
 /**
@@ -866,23 +1063,52 @@ function handleApiError(error) {
   el.appendChild(bubble);
   container.appendChild(el);
   scrollToBottom();
-
-  isStreaming = false;
 }
 
 /**
- * Cancel ongoing stream
+ * Cancel ongoing stream for the active tab
  */
 export function cancelStream() {
-  if (currentAbortController) {
-    currentAbortController.abort();
-    currentAbortController = null;
+  if (!activeTabId) return;
+  const stream = getTabStream(activeTabId);
+
+  if (stream.abortController) {
+    stream.abortController.abort();
+    stream.abortController = null;
   }
-  if (currentParser) {
-    smd.parser_end(currentParser);
-    currentParser = null;
+  if (stream.parser) {
+    smd.parser_end(stream.parser);
+    stream.parser = null;
   }
-  isStreaming = false;
+
+  // Save partial response if any accumulated text
+  if (stream.accumulatedText.trim()) {
+    const el = document.getElementById('streaming-message');
+    const bubble = document.getElementById('streaming-bubble');
+    if (el) {
+      el.removeAttribute('id');
+      el.dataset.messageId = Date.now();
+    }
+    if (bubble) {
+      bubble.removeAttribute('id');
+    }
+
+    const msg = {
+      id: Date.now(),
+      content: stream.accumulatedText,
+      role: 'assistant',
+      timestamp: new Date()
+    };
+    messages.push(msg);
+    ChatContext.addMessage('assistant', stream.accumulatedText);
+    saveCurrentTabMessages();
+  } else {
+    const el = document.getElementById('streaming-message');
+    if (el) el.remove();
+  }
+
+  stream.isStreaming = false;
+  stream.accumulatedText = '';
 }
 
 /**
@@ -895,8 +1121,9 @@ async function sendMessage() {
   const content = textarea.value.trim();
   if (!content) return;
 
-  // Don't allow sending while streaming
-  if (isStreaming) return;
+  // Don't allow sending while this tab is streaming
+  const activeStream = getTabStream(activeTabId);
+  if (activeStream.isStreaming) return;
 
   // Add user message to UI
   addMessage(content, 'user');
@@ -920,12 +1147,16 @@ async function sendMessage() {
  * Send message using backend Agent SDK (Agent mode)
  */
 async function sendAgentMessage(content) {
+  const tabId = activeTabId;
+  const stream = getTabStream(tabId);
+
   // Show typing indicator
   showTypingIndicator();
-  isStreaming = true;
+  stream.isStreaming = true;
+  stream.accumulatedText = '';
 
   // Create abort controller for cancellation
-  currentAbortController = new AbortController();
+  stream.abortController = new AbortController();
 
   try {
     const response = await fetch(AGENT_API_URL, {
@@ -935,7 +1166,7 @@ async function sendAgentMessage(content) {
         prompt: content,
         conversationHistory: ChatContext.getConversationHistory().slice(0, -1)
       }),
-      signal: currentAbortController.signal
+      signal: stream.abortController.signal
     });
 
     if (!response.ok) {
@@ -947,7 +1178,7 @@ async function sendAgentMessage(content) {
     const decoder = new TextDecoder();
     let buffer = '';
     let fullText = '';
-    let streamingBubble = null;
+    let bubbleCreated = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -968,30 +1199,36 @@ async function sendAgentMessage(content) {
             const event = JSON.parse(data);
             handleAgentEvent(event, {
               onText: (text) => {
-                removeTypingIndicator();
-                if (!streamingBubble) {
-                  streamingBubble = createStreamingBubble();
+                if (tabId === activeTabId) removeTypingIndicator();
+                if (!bubbleCreated) {
+                  createStreamingBubble(tabId);
+                  bubbleCreated = true;
                 }
-                writeStreamingChunk(text);
+                writeStreamingChunk(tabId, text);
                 fullText += text;
               },
               onToolUse: (toolUse) => {
-                showToolUseIndicator(toolUse);
+                if (tabId === activeTabId) showToolUseIndicator(toolUse);
               },
               onToolResult: (toolResult) => {
-                handleToolResult(toolResult);
+                if (tabId === activeTabId) handleToolResult(toolResult);
               },
               onDone: () => {
-                removeTypingIndicator();
-                removeToolIndicators();
-                isStreaming = false;
-                currentAbortController = null;
+                if (tabId === activeTabId) {
+                  removeTypingIndicator();
+                  removeToolIndicators();
+                }
+                stream.abortController = null;
                 if (fullText) {
-                  finalizeStreamingBubble(fullText);
+                  finalizeStreamingBubble(tabId, fullText);
+                } else {
+                  stream.isStreaming = false;
                 }
               },
               onError: (errorMsg) => {
-                handleApiError(new Error(errorMsg));
+                stream.isStreaming = false;
+                stream.abortController = null;
+                if (tabId === activeTabId) handleApiError(new Error(errorMsg));
               }
             });
           } catch (parseError) {
@@ -1002,11 +1239,12 @@ async function sendAgentMessage(content) {
     }
 
   } catch (error) {
+    stream.isStreaming = false;
+    stream.abortController = null;
     if (error.name === 'AbortError') {
       return;
     }
-    handleApiError(error);
-    currentAbortController = null;
+    if (tabId === activeTabId) handleApiError(error);
   }
 }
 
@@ -1137,42 +1375,48 @@ async function sendAskMessage(content) {
     return;
   }
 
+  const tabId = activeTabId;
+  const stream = getTabStream(tabId);
+
   // Show typing indicator
   showTypingIndicator();
-  isStreaming = true;
+  stream.isStreaming = true;
+  stream.accumulatedText = '';
 
   // Create abort controller for cancellation
-  currentAbortController = new AbortController();
+  stream.abortController = new AbortController();
 
-  // Create streaming bubble
-  let streamingBubble = null;
+  let bubbleCreated = false;
 
   await AnthropicService.sendMessage({
     message: content,
     mode: currentMode,
     conversationHistory: ChatContext.getConversationHistory().slice(0, -1),
-    signal: currentAbortController.signal,
+    signal: stream.abortController.signal,
 
     onChunk: (chunk, fullText) => {
-      removeTypingIndicator();
-      if (!streamingBubble) {
-        streamingBubble = createStreamingBubble();
+      if (tabId === activeTabId) removeTypingIndicator();
+      if (!bubbleCreated) {
+        createStreamingBubble(tabId);
+        bubbleCreated = true;
       }
-      writeStreamingChunk(chunk);
+      writeStreamingChunk(tabId, chunk);
     },
 
     onComplete: (fullText) => {
-      removeTypingIndicator();
-      isStreaming = false;
-      currentAbortController = null;
+      if (tabId === activeTabId) removeTypingIndicator();
+      stream.abortController = null;
       if (fullText) {
-        finalizeStreamingBubble(fullText);
+        finalizeStreamingBubble(tabId, fullText);
+      } else {
+        stream.isStreaming = false;
       }
     },
 
     onError: (error) => {
-      handleApiError(error);
-      currentAbortController = null;
+      stream.isStreaming = false;
+      stream.abortController = null;
+      if (tabId === activeTabId) handleApiError(error);
     }
   });
 }

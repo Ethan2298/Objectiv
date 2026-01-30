@@ -1782,6 +1782,17 @@ body.solarized-mode .web-search-dropdown {
   text-align: left;
 }
 
+.tab-title.editing {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin: 0 -4px;
+  overflow: visible;
+  text-overflow: clip;
+  cursor: text;
+}
+
 .tab-close {
   display: flex;
   align-items: center;
