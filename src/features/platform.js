@@ -73,6 +73,7 @@ export function initSettingsButton() {
   const modal = document.getElementById('settings-modal');
   const closeBtn = document.getElementById('settings-modal-close');
   const themeSelect = document.getElementById('settings-theme-select');
+  const modelSelect = document.getElementById('settings-model-select');
 
   // Apply saved theme on load
   applyStoredTheme();
@@ -107,6 +108,13 @@ export function initSettingsButton() {
       setTheme(e.target.value);
     });
   }
+
+  // Model select change handler
+  if (modelSelect) {
+    modelSelect.addEventListener('change', (e) => {
+      setSelectedModel(e.target.value);
+    });
+  }
 }
 
 /**
@@ -115,6 +123,7 @@ export function initSettingsButton() {
 export function openSettingsModal() {
   const modal = document.getElementById('settings-modal');
   const themeSelect = document.getElementById('settings-theme-select');
+  const modelSelect = document.getElementById('settings-model-select');
 
   if (!modal) return;
 
@@ -122,6 +131,11 @@ export function openSettingsModal() {
   if (themeSelect) {
     const currentTheme = getCurrentTheme();
     themeSelect.value = currentTheme;
+  }
+
+  // Update model select to current value
+  if (modelSelect) {
+    modelSelect.value = getSelectedModel();
   }
 
   modal.style.display = 'flex';
@@ -142,6 +156,28 @@ export function closeSettingsModal() {
  */
 export function openSettingsTab() {
   openSettingsModal();
+}
+
+// ========================================
+// Model Selection
+// ========================================
+
+const MODEL_STORAGE_KEY = 'layer-agent-model';
+
+/**
+ * Get selected model ID from localStorage
+ * @returns {string}
+ */
+export function getSelectedModel() {
+  return localStorage.getItem(MODEL_STORAGE_KEY) || 'claude-opus-4-5-20251101';
+}
+
+/**
+ * Set selected model ID to localStorage
+ * @param {string} modelId
+ */
+export function setSelectedModel(modelId) {
+  localStorage.setItem(MODEL_STORAGE_KEY, modelId);
 }
 
 // ========================================
@@ -279,6 +315,8 @@ export default {
   applyStoredTheme,
   getCurrentTheme,
   setTheme,
+  getSelectedModel,
+  setSelectedModel,
   initSettingsButton,
   openSettingsModal,
   closeSettingsModal,

@@ -21,6 +21,22 @@ export const ANTHROPIC_MODEL = 'claude-opus-4-5-20251101';
 export const ANTHROPIC_MAX_TOKENS = 4096;
 
 // ========================================
+// OpenRouter Configuration
+// ========================================
+
+export const OPENROUTER_API_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+export const OPENROUTER_DEFAULT_MODEL = 'moonshotai/kimi-k2';
+
+// ========================================
+// Model Options
+// ========================================
+
+export const MODEL_OPTIONS = [
+  { id: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', provider: 'anthropic' },
+  { id: 'moonshotai/kimi-k2', label: 'Kimi K2', provider: 'openrouter' },
+];
+
+// ========================================
 // Default Export
 // ========================================
 
@@ -33,5 +49,9 @@ export default {
     endpoint: ANTHROPIC_API_ENDPOINT,
     model: ANTHROPIC_MODEL,
     maxTokens: ANTHROPIC_MAX_TOKENS
+  },
+  openrouter: {
+    endpoint: OPENROUTER_API_ENDPOINT,
+    defaultModel: OPENROUTER_DEFAULT_MODEL
   }
 };
